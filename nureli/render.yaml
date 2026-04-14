@@ -1,0 +1,65 @@
+# Render.com Deployment Configuration (for nureli/ as repo root)
+#
+# USE THIS FILE if you push just the nureli/ folder to GitHub
+# (instead of the entire Nureli V1.00 folder)
+#
+# SETUP STEPS:
+# 1. Push the nureli/ folder to GitHub as your repo root
+# 2. Go to dashboard.render.com → New → Web Service
+# 3. Connect your GitHub repo
+# 4. Render auto-detects this file — confirm settings
+# 5. Add all environment variables in Render dashboard
+# 6. Click Deploy
+#
+# FREE TIER ANTI-SLEEP (CRITICAL for WhatsApp):
+# → Sign up at https://uptimerobot.com (free)
+# → Add Monitor: HTTP(s) → https://your-app.onrender.com/api/health
+# → Interval: Every 5 minutes
+# This prevents the server from sleeping and keeps WhatsApp connected!
+
+services:
+  - type: web
+    name: norla
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── Supabase (get from supabase.com → Settings → API) ─────────
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+      # ── Google Gemini AI (aistudio.google.com/app/apikey) ─────────
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # ── Admin Panel ───────────────────────────────────────────────
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      - key: ADMIN_JWT_SECRET
+        sync: false
+
+      # ── App URL (set after first deploy, get from Render dashboard) ─
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false   # e.g. https://norla.onrender.com
+
+      # ── Contact email for Privacy Policy / Terms pages ─────────────
+      - key: NEXT_PUBLIC_CONTACT_EMAIL
+        sync: false   # e.g. your@gmail.com
+
+      # ── Disable demo mode in production ───────────────────────────
+      - key: NEXT_PUBLIC_DEMO_MODE
+        value: 'false'

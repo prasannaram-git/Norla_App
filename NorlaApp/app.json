@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Norla",
+    "slug": "norla",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "norla",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D9488"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.norla.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Norla needs camera access to capture photos for nutrition analysis",
+        "NSPhotoLibraryUsageDescription": "Norla needs photo library access to select images for analysis"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D9488"
+      },
+      "package": "com.norla.app",
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"],
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "serverUrl": "http://10.129.115.191:3000"
+    },
+    "plugins": [
+      "expo-splash-screen"
+    ]
+  }
+}
