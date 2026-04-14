@@ -26,8 +26,9 @@ export async function GET(req: NextRequest) {
     const { getAllSlotStatuses } = await import('@/lib/whatsapp-web');
     const slots = getAllSlotStatuses();
     return NextResponse.json({ slots });
-  } catch {
-    // WhatsApp module unavailable in some environments (e.g. Vercel)
+  } catch (err) {
+    console.error('[Admin WhatsApp GET Error]', err);
+    // WhatsApp module unavailable in some environments
     return NextResponse.json({
       slots: Array.from({ length: 5 }, (_, i) => ({
         slotId: `slot-${i + 1}`,
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
         qrCode: null,
         phoneNumber: null,
         userName: null,
-        lastError: 'WhatsApp module unavailable in this environment',
+        lastError: `WhatsApp module error: ${err instanceof Error ? err.message : 'Unknown'}`,
         messagesSent: 0,
       })),
     });
@@ -54,10 +55,19 @@ export async function POST(req: NextRequest) {
       await import('@/lib/whatsapp-web');
 
     if (action === 'connect') {
-      await connectWhatsAppSlot(slotId);
-      // Give Baileys 2 seconds to generate QR
-      await new Promise((r) => setTimeout(r, 2000));
-      const status = getWhatsAppSlotStatus(slotId);
+      // Start the connection (non-blocking — QR arrives asynchronously)
+      connectWhatsAppSlot(slotId).catch((err) => {
+        console.error(`[WhatsApp] Connect error for ${slotId}:`, err);
+      });
+      
+      // Wait up to 8 seconds for QR code to appear
+      let status = getWhatsAppSlotStatus(slotId);
+      for (let i = 0; i < 16; i++) {
+        if (status.status === 'qr_ready' || status.status === 'connected') break;
+        await new Promise((r) => setTimeout(r, 500));
+        status = getWhatsAppSlotStatus(slotId);
+      }
+      
       return NextResponse.json(status);
     }
 
@@ -70,6 +80,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid action. Use "connect" or "disconnect".' }, { status: 400 });
   } catch (err: unknown) {
     console.error('[Admin WhatsApp Error]', err);
-    return NextResponse.json({ error: 'WhatsApp operation failed' }, { status: 500 });
+    return NextResponse.json({ 
+      error: `WhatsApp operation failed: ${err instanceof Error ? err.message : 'Unknown error'}` 
+    }, { status: 500 });
   }
 }

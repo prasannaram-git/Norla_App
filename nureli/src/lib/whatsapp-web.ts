@@ -28,6 +28,7 @@ export interface WASlot {
   messagesSent: number;    // for round-robin: use least-used first
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   socket: any | null;      // Baileys WASocket instance
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
 }
 
 // ── Global singleton state ─────────────────────────────────────────
@@ -52,6 +53,7 @@ function getSlots(): Map<string, WASlot> {
         lastError: null,
         messagesSent: 0,
         socket: null,
+        reconnectTimer: null,
       });
     }
   }
@@ -71,6 +73,12 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
   const slot = slots.get(slotId);
   if (!slot) throw new Error(`Unknown slot: ${slotId}`);
 
+  // Clear any pending reconnect
+  if (slot.reconnectTimer) {
+    clearTimeout(slot.reconnectTimer);
+    slot.reconnectTimer = null;
+  }
+
   // Disconnect existing socket if any
   if (slot.socket) {
     try { slot.socket.end(undefined); } catch { /* ignore */ }
@@ -82,13 +90,18 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
   slot.lastError = null;
   slots.set(slotId, slot);
 
+  console.log(`[WhatsApp] Connecting ${slotId}...`);
+
   try {
-    const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } =
-      await import('@whiskeysockets/baileys');
+    const baileys = await import('@whiskeysockets/baileys');
+    const makeWASocket = baileys.default;
+    const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys;
 
     const authDir = getAuthDir(slotId);
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
     const { version } = await fetchLatestBaileysVersion();
+
+    console.log(`[WhatsApp] ${slotId} using Baileys version ${version.join('.')}`);
 
     const sock = makeWASocket({
       version,
@@ -97,56 +110,74 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       logger: { level: 'silent', fatal: () => {}, error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, trace: () => {}, child: () => ({} as any) } as any,
       browser: Browsers.ubuntu('Chrome'),
+      // Increase timeout for slow servers
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: undefined,
+      qrTimeout: 60000,
     });
 
     slot.socket = sock;
     slots.set(slotId, slot);
 
     // QR code event
-    sock.ev.on('connection.update', async (update) => {
+    sock.ev.on('connection.update', async (update: { connection?: string; lastDisconnect?: { error?: Error }; qr?: string }) => {
       const { connection, lastDisconnect, qr } = update;
       const currentSlot = slots.get(slotId)!;
+
+      console.log(`[WhatsApp] ${slotId} connection.update:`, { connection, hasQR: !!qr, hasError: !!lastDisconnect?.error });
 
       if (qr) {
         try {
           const qrDataUrl = await qrcode.toDataURL(qr, { width: 300, margin: 2 });
           currentSlot.qrCode = qrDataUrl;
           currentSlot.status = 'qr_ready';
-        } catch {
+          currentSlot.lastError = null;
+          console.log(`[WhatsApp] ${slotId} QR code generated successfully`);
+        } catch (qrErr) {
+          console.error(`[WhatsApp] ${slotId} QR generation failed:`, qrErr);
           currentSlot.qrCode = null;
+          currentSlot.lastError = `QR generation failed: ${qrErr instanceof Error ? qrErr.message : 'Unknown'}`;
         }
         slots.set(slotId, currentSlot);
       }
 
       if (connection === 'close') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const errorObj = lastDisconnect?.error as any;
         const statusCode = errorObj?.output?.statusCode;
-        const errMsg = errorObj?.message || 'Unknown Error';
-        
-        const { Boom } = await import('@hapi/boom');
+        const errMsg = errorObj?.message || errorObj?.toString() || 'Unknown';
+
+        console.log(`[WhatsApp] ${slotId} disconnected: code=${statusCode}, msg=${errMsg}`);
+
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-        currentSlot.status = 'disconnected';
         currentSlot.socket = null;
-        currentSlot.phoneNumber = null;
-        currentSlot.userName = null;
+        currentSlot.qrCode = null;
 
-        if (shouldReconnect && statusCode !== 401) {
-          // Auto-reconnect after 5 seconds
-          currentSlot.lastError = `Disconnected (code ${statusCode}: ${errMsg}) — reconnecting...`;
+        if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+          // Logged out — wipe auth and stop
+          currentSlot.status = 'disconnected';
+          currentSlot.phoneNumber = null;
+          currentSlot.userName = null;
+          currentSlot.lastError = 'Logged out. Click Connect to scan a new QR code.';
+          try { fs.rmSync(getAuthDir(slotId), { recursive: true, force: true }); } catch { /* ignore */ }
           slots.set(slotId, currentSlot);
-          setTimeout(() => connectWhatsAppSlot(slotId).catch(() => {}), 5000);
+        } else if (shouldReconnect) {
+          // Auto-reconnect after 10 seconds (not too aggressive)
+          currentSlot.status = 'connecting';
+          currentSlot.lastError = `Reconnecting... (code ${statusCode}: ${errMsg})`;
+          slots.set(slotId, currentSlot);
+          currentSlot.reconnectTimer = setTimeout(() => {
+            currentSlot.reconnectTimer = null;
+            connectWhatsAppSlot(slotId).catch(() => {});
+          }, 10000);
         } else {
-          currentSlot.lastError = statusCode === DisconnectReason.loggedOut
-            ? 'Logged out. Please reconnect and scan QR again.'
-            : `Connection closed (${statusCode})`;
-          // If logged out, wipe auth files so fresh QR is generated next time
-          if (statusCode === DisconnectReason.loggedOut) {
-            try { fs.rmSync(getAuthDir(slotId), { recursive: true, force: true }); } catch { /* ignore */ }
-          }
+          currentSlot.status = 'disconnected';
+          currentSlot.phoneNumber = null;
+          currentSlot.userName = null;
+          currentSlot.lastError = `Connection closed (${statusCode}: ${errMsg})`;
           slots.set(slotId, currentSlot);
         }
-        void Boom; // prevent unused import warning
       }
 
       if (connection === 'open') {
@@ -169,11 +200,11 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
     sock.ev.on('creds.update', saveCreds);
 
   } catch (err) {
+    console.error(`[WhatsApp] Slot ${slotId} failed to initialize:`, err);
     slot.status = 'disconnected';
-    slot.lastError = err instanceof Error ? err.message : 'Connection failed';
+    slot.lastError = `Init failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
     slot.socket = null;
     slots.set(slotId, slot);
-    console.error(`[WhatsApp] Slot ${slotId} failed:`, err);
   }
 }
 
@@ -182,6 +213,13 @@ export async function disconnectWhatsAppSlot(slotId: string): Promise<void> {
   const slots = getSlots();
   const slot = slots.get(slotId);
   if (!slot) return;
+
+  // Clear reconnect timer
+  if (slot.reconnectTimer) {
+    clearTimeout(slot.reconnectTimer);
+    slot.reconnectTimer = null;
+  }
+
   if (slot.socket) {
     try { slot.socket.end(undefined); } catch { /* ignore */ }
     slot.socket = null;
@@ -208,27 +246,28 @@ export async function disconnectWhatsApp(): Promise<void> {
 }
 
 // ── Get status of a single slot ────────────────────────────────────
-export function getWhatsAppSlotStatus(slotId: string): Omit<WASlot, 'socket'> {
+export function getWhatsAppSlotStatus(slotId: string): Omit<WASlot, 'socket' | 'reconnectTimer'> {
   const slots = getSlots();
   const slot = slots.get(slotId) ?? {
     slotId, label: slotId, status: 'disconnected' as ConnectionStatus,
     qrCode: null, phoneNumber: null, userName: null, lastError: null,
-    messagesSent: 0, socket: null,
+    messagesSent: 0, socket: null, reconnectTimer: null,
   };
-  // Never expose the socket object to callers
-  const { socket: _socket, ...safe } = slot;
+  // Never expose internal objects to callers
+  const { socket: _socket, reconnectTimer: _timer, ...safe } = slot;
   void _socket;
+  void _timer;
   return safe;
 }
 
 // ── Get status of all slots ────────────────────────────────────────
-export function getAllSlotStatuses(): Omit<WASlot, 'socket'>[] {
+export function getAllSlotStatuses(): Omit<WASlot, 'socket' | 'reconnectTimer'>[] {
   const slots = getSlots();
-  return Array.from(slots.values()).map(({ socket: _s, ...safe }) => { void _s; return safe; });
+  return Array.from(slots.values()).map(({ socket: _s, reconnectTimer: _t, ...safe }) => { void _s; void _t; return safe; });
 }
 
 // ── Legacy single-slot status ─────────────────────────────────────
-export function getWhatsAppStatus(): Omit<WASlot, 'socket'> {
+export function getWhatsAppStatus(): Omit<WASlot, 'socket' | 'reconnectTimer'> {
   return getWhatsAppSlotStatus('slot-1');
 }
 

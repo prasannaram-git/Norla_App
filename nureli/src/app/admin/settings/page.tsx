@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   MessageSquare, Wifi, WifiOff, QrCode, RefreshCw,
   Phone, CheckCircle, XCircle, Loader2, Plus, AlertCircle,
@@ -21,6 +21,8 @@ export default function AdminSettingsPage() {
   const [slots, setSlots] = useState<WASlot[]>([]);
   const [loadingSlot, setLoadingSlot] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+  const pollingRef = useRef(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
   const headers: Record<string, string> = {
@@ -33,28 +35,60 @@ export default function AdminSettingsPage() {
       const res = await fetch('/api/admin/whatsapp', { headers });
       if (res.ok) {
         const data = await res.json();
-        if (data.slots) setSlots(data.slots);
-        return data.slots as WASlot[];
+        if (data.slots) {
+          setSlots(data.slots);
+          return data.slots as WASlot[];
+        }
       }
     } catch { /* ignore */ }
     return [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  // Initial fetch
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
-  // Poll while any slot is connecting/qr_ready
-  useEffect(() => {
-    const hasActive = slots.some((s) => s.status === 'connecting' || s.status === 'qr_ready');
-    if (!hasActive) { setPolling(false); return; }
+  // Start or stop polling based on slot states
+  const startPolling = useCallback(() => {
+    if (pollingRef.current) return;
+    pollingRef.current = true;
     setPolling(true);
-    const interval = setInterval(async () => {
+    
+    intervalRef.current = setInterval(async () => {
       const updated = await fetchStatus();
-      const stillActive = updated.some((s) => s.status === 'connecting' || s.status === 'qr_ready');
-      if (!stillActive) { clearInterval(interval); setPolling(false); }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [slots, fetchStatus]);
+      const needsPolling = updated.some((s) =>
+        s.status === 'connecting' || s.status === 'qr_ready' ||
+        (s.lastError && s.lastError.includes('Reconnecting'))
+      );
+      if (!needsPolling) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        pollingRef.current = false;
+        setPolling(false);
+      }
+    }, 2000); // Poll every 2 seconds for responsive QR display
+  }, [fetchStatus]);
+
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    pollingRef.current = false;
+    setPolling(false);
+  }, []);
+
+  // Auto-start polling when any slot is in an active state
+  useEffect(() => {
+    const needsPolling = slots.some((s) =>
+      s.status === 'connecting' || s.status === 'qr_ready' ||
+      (s.lastError && s.lastError.includes('Reconnecting'))
+    );
+    if (needsPolling && !pollingRef.current) {
+      startPolling();
+    }
+  }, [slots, startPolling]);
+
+  // Cleanup on unmount
+  useEffect(() => { return () => stopPolling(); }, [stopPolling]);
 
   const handleConnect = async (slotId: string) => {
     setLoadingSlot(slotId);
@@ -67,6 +101,11 @@ export default function AdminSettingsPage() {
       if (res.ok) {
         const data = await res.json();
         setSlots((prev) => prev.map((s) => s.slotId === slotId ? { ...s, ...data } : s));
+        // Start polling immediately after connect
+        startPolling();
+      } else {
+        const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        setSlots((prev) => prev.map((s) => s.slotId === slotId ? { ...s, lastError: errData.error } : s));
       }
     } catch { /* ignore */ }
     setLoadingSlot(null);
@@ -164,18 +203,27 @@ function SlotCard({
   onDisconnect: () => void;
   onRefresh: () => void;
 }) {
+  const isReconnecting = slot.lastError?.includes('Reconnecting');
+
   const statusColor = {
     connected: 'bg-emerald-50 text-emerald-600',
     qr_ready: 'bg-amber-50 text-amber-600',
     connecting: 'bg-amber-50 text-amber-600',
-    disconnected: 'bg-neutral-100 text-neutral-500',
+    disconnected: isReconnecting ? 'bg-amber-50 text-amber-600' : 'bg-neutral-100 text-neutral-500',
   }[slot.status];
 
   const dotColor = {
     connected: 'bg-emerald-500',
     qr_ready: 'bg-amber-500 animate-pulse',
     connecting: 'bg-amber-500 animate-pulse',
-    disconnected: 'bg-neutral-400',
+    disconnected: isReconnecting ? 'bg-amber-500 animate-pulse' : 'bg-neutral-400',
+  }[slot.status];
+
+  const statusLabel = {
+    connected: 'Connected',
+    qr_ready: 'Scan QR',
+    connecting: 'Connecting',
+    disconnected: isReconnecting ? 'Reconnecting' : 'Offline',
   }[slot.status];
 
   return (
@@ -198,16 +246,22 @@ function SlotCard({
         </div>
         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
           <div className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-          {slot.status === 'connected' ? 'Connected' :
-           slot.status === 'qr_ready' ? 'Scan QR' :
-           slot.status === 'connecting' ? 'Connecting' : 'Offline'}
+          {statusLabel}
         </div>
       </div>
 
       {/* Error */}
-      {slot.lastError && slot.status === 'disconnected' && (
+      {slot.lastError && !isReconnecting && slot.status === 'disconnected' && (
         <div className="flex items-center gap-2 text-[11px] text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3" style={{ border: '1px solid rgba(220,38,38,0.08)' }}>
           <XCircle className="h-3 w-3 shrink-0" />
+          {slot.lastError}
+        </div>
+      )}
+
+      {/* Reconnecting notice */}
+      {isReconnecting && (
+        <div className="flex items-center gap-2 text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-3" style={{ border: '1px solid rgba(245,158,11,0.15)' }}>
+          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
           {slot.lastError}
         </div>
       )}
@@ -242,7 +296,7 @@ function SlotCard({
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {slot.status === 'disconnected' && (
+        {(slot.status === 'disconnected' && !isReconnecting) && (
           <button
             onClick={onConnect}
             disabled={loading}
