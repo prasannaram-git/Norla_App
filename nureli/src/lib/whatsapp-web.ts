@@ -83,7 +83,7 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
   slots.set(slotId, slot);
 
   try {
-    const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } =
+    const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } =
       await import('@whiskeysockets/baileys');
 
     const authDir = getAuthDir(slotId);
@@ -96,7 +96,7 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
       printQRInTerminal: false,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       logger: { level: 'silent', fatal: () => {}, error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, trace: () => {}, child: () => ({} as any) } as any,
-      browser: [`Norla ${slotId}`, 'Chrome', '130.0.0.0'],
+      browser: Browsers.ubuntu('Chrome'),
     });
 
     slot.socket = sock;
@@ -119,7 +119,10 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
       }
 
       if (connection === 'close') {
-        const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output?.statusCode;
+        const errorObj = lastDisconnect?.error as any;
+        const statusCode = errorObj?.output?.statusCode;
+        const errMsg = errorObj?.message || 'Unknown Error';
+        
         const { Boom } = await import('@hapi/boom');
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
@@ -130,7 +133,7 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
 
         if (shouldReconnect && statusCode !== 401) {
           // Auto-reconnect after 5 seconds
-          currentSlot.lastError = `Disconnected (code ${statusCode}) — reconnecting...`;
+          currentSlot.lastError = `Disconnected (code ${statusCode}: ${errMsg}) — reconnecting...`;
           slots.set(slotId, currentSlot);
           setTimeout(() => connectWhatsAppSlot(slotId).catch(() => {}), 5000);
         } else {
