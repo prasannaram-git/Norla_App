@@ -1,0 +1,33 @@
+{
+  "name": "norla-admin",
+  "version": "1.0.0",
+  "description": "Norla Admin Panel — Desktop Server Manager",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "author": "Norla Team",
+  "license": "MIT",
+  "dependencies": {
+    "electron-is-dev": "^2.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.norla.admin",
+    "productName": "Norla Admin",
+    "win": {
+      "target": "portable",
+      "icon": "../LOGO/Norla_with_bg_logo.png"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "splash.html"
+    ],
+    "extraResources": []
+  }
+}

@@ -1,0 +1,68 @@
+# Render.com Deployment Configuration
+# Deploys the Norla Next.js server to Render.com FREE tier
+# WhatsApp Baileys runs in the same process (no serverless limitations)
+#
+# SETUP STEPS:
+# 1. Push this repo to GitHub
+# 2. Go to dashboard.render.com → New → Web Service
+# 3. Connect your GitHub repo
+# 4. Render will auto-detect this render.yaml
+# 5. Set the environment variables listed below in Render dashboard
+# 6. Deploy!
+#
+# FREE TIER ANTI-SLEEP:
+# Render free tier sleeps after 15 min of inactivity.
+# To keep WhatsApp connected 24/7:
+#   → Go to https://uptimerobot.com (free account)
+#   → Add Monitor → HTTP(s) → URL: https://your-app.onrender.com/api/health
+#   → Interval: 5 minutes
+# This keeps the server awake and WhatsApp connected.
+
+services:
+  - type: web
+    name: norla-server
+    runtime: node
+    plan: free                          # Free tier — upgrade to starter ($7/mo) for no sleep
+    region: singapore                   # Closest to India
+    rootDir: nureli                     # The Next.js project folder
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health        # Used by Render to check server health
+    autoDeploy: true                    # Auto-deploy on every git push to main
+
+    envVars:
+      # ── Required — Set these in Render Dashboard → Environment ──
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+
+      # ── Supabase (get from supabase.com → Settings → API) ──
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false                     # Enter manually in Render dashboard
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+      # ── Google Gemini AI (get from aistudio.google.com) ──
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # ── Admin Panel Credentials ──
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false                     # Generate: openssl rand -hex 32
+
+      # ── App URL (your Render URL) ──
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false                     # e.g. https://norla-server.onrender.com
+
+      # ── Optional contact email for legal pages ──
+      - key: NEXT_PUBLIC_CONTACT_EMAIL
+        sync: false                     # e.g. youremail@gmail.com
+
+      # ── Disable demo mode in production ──
+      - key: NEXT_PUBLIC_DEMO_MODE
+        value: 'false'
