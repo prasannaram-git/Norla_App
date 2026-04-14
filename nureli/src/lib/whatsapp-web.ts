@@ -103,12 +103,25 @@ export async function connectWhatsAppSlot(slotId: string): Promise<void> {
 
     console.log(`[WhatsApp] ${slotId} using Baileys version ${version.join('.')}`);
 
+    // Baileys requires a pino-compatible logger. We create a recursive no-op logger
+    // so that logger.child().child().trace() etc. all work without crashing.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const noopLogger: any = {
+      level: 'silent',
+      fatal: () => {},
+      error: () => {},
+      warn: () => {},
+      info: () => {},
+      debug: () => {},
+      trace: () => {},
+      child: () => noopLogger, // Return itself so child loggers also have all methods
+    };
+
     const sock = makeWASocket({
       version,
       auth: state,
       printQRInTerminal: false,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      logger: { level: 'silent', fatal: () => {}, error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, trace: () => {}, child: () => ({} as any) } as any,
+      logger: noopLogger,
       browser: Browsers.ubuntu('Chrome'),
       // Increase timeout for slow servers
       connectTimeoutMs: 60000,
