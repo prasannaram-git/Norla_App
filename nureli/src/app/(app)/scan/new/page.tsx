@@ -84,6 +84,31 @@ export default function NewScanPage() {
     return true;
   };
 
+  // Compress a base64 image to max 800px and JPEG 0.7 quality (~100KB instead of ~3MB)
+  const compressImage = useCallback((base64: string | null): Promise<string | null> => {
+    if (!base64) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          const ratio = Math.min(MAX / w, MAX / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => resolve(base64); // fallback to original
+      img.src = base64;
+    });
+  }, []);
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     setSubmitError('');
@@ -95,11 +120,26 @@ export default function NewScanPage() {
         router.push(`/scan/${scanId}/results`);
         return;
       }
+
+      // Compress images before sending (3MB → ~100KB each)
+      const [compFace, compEye, compHand] = await Promise.all([
+        compressImage(images.face),
+        compressImage(images.eye),
+        compressImage(images.hand),
+      ]);
+
+      // 55-second timeout to handle Render's request limits
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 55000);
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ faceImage: images.face, eyeImage: images.eye, handImage: images.hand, questionnaire }),
+        body: JSON.stringify({ faceImage: compFace, eyeImage: compEye, handImage: compHand, questionnaire }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
+
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.error || 'Analysis failed. Please try again.');
@@ -156,7 +196,11 @@ export default function NewScanPage() {
       }));
       router.push(`/scan/${result.scanId}/results`);
     } catch (err: unknown) {
-      setSubmitError(err instanceof Error ? err.message : 'Something went wrong');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setSubmitError('Analysis took too long. Please check your connection and try again.');
+      } else {
+        setSubmitError(err instanceof Error ? err.message : 'Something went wrong');
+      }
       setIsSubmitting(false);
     }
   };

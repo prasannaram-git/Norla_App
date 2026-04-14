@@ -5,7 +5,18 @@ import { getGeminiModelWithFallback } from '@/lib/gemini-keys';
 import { scanPayloadSchema } from '@/lib/validators';
 import { logActivity } from '@/lib/server-store';
 
+// Helper: run a promise with a timeout
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise
+      .then((v) => { clearTimeout(timer); resolve(v); })
+      .catch((e) => { clearTimeout(timer); reject(e); });
+  });
+}
+
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await req.json();
 
@@ -25,14 +36,19 @@ export async function POST(req: NextRequest) {
     const sessionPhone = req.cookies.get('norla_session')?.value || 'anonymous';
     const scanId = crypto.randomUUID();
 
-    // Log scan start
+    // Log scan start (fire and forget)
     logActivity('scan_started', sessionPhone, { scan_id: scanId });
 
     let aiObservations = {};
 
-    // Gemini AI analysis with key fallback
+    // Gemini AI analysis with 25-second timeout (Render free tier kills at 30s)
     try {
-      const gemini = await getGeminiModelWithFallback();
+      console.log(`[Analyze] ${scanId} Starting Gemini AI analysis...`);
+      const gemini = await withTimeout(
+        getGeminiModelWithFallback(),
+        5000,
+        'Gemini model init'
+      );
       const prompt = buildAnalysisPrompt(questionnaire);
 
       // Convert base64 images to parts
@@ -50,42 +66,56 @@ export async function POST(req: NextRequest) {
         })
         .filter(Boolean);
 
-      const result = await gemini.model.generateContent([
-        prompt,
-        ...imageParts as { inlineData: { mimeType: string; data: string } }[],
-      ]);
+      console.log(`[Analyze] ${scanId} Sending ${imageParts.length} images to Gemini (payload prep: ${Date.now() - startTime}ms)`);
+
+      const result = await withTimeout(
+        gemini.model.generateContent([
+          prompt,
+          ...imageParts as { inlineData: { mimeType: string; data: string } }[],
+        ]),
+        25000,      // 25 second timeout for the AI call itself
+        'Gemini AI generation'
+      );
 
       // Record successful usage
-      await gemini.onSuccess();
+      gemini.onSuccess().catch(() => {});
 
       const responseText = result.response.text();
+      console.log(`[Analyze] ${scanId} Gemini responded in ${Date.now() - startTime}ms (${responseText.length} chars)`);
+      
       const parsed = parseGeminiResponse(responseText);
       if (parsed) {
         aiObservations = parsed;
       }
     } catch (aiError: unknown) {
-      console.error('[Analyze] Gemini failed:', aiError);
+      const errMsg = aiError instanceof Error ? aiError.message : 'Unknown';
+      console.error(`[Analyze] ${scanId} Gemini failed after ${Date.now() - startTime}ms:`, errMsg);
       logActivity('scan_ai_error', sessionPhone, {
         scan_id: scanId,
-        error: aiError instanceof Error ? aiError.message : 'Unknown',
-      });
+        error: errMsg,
+      }).catch(() => {});
+      // Continue — we'll still return questionnaire-based scores
     }
 
-    // Compute scores (90% AI / 10% questionnaire when AI available)
+    // Compute scores (90% AI / 10% questionnaire when AI available, 100% questionnaire when AI fails)
     const scanResult = computeScores(questionnaire, aiObservations);
 
-    // Log completion
+    // Log completion (fire and forget)
     logActivity('scan_completed', sessionPhone, {
       scan_id: scanId,
       score: String(scanResult.overallBalanceScore),
-    });
+      ai_used: Object.keys(aiObservations).length > 0 ? 'yes' : 'no',
+      total_ms: String(Date.now() - startTime),
+    }).catch(() => {});
+
+    console.log(`[Analyze] ${scanId} Complete in ${Date.now() - startTime}ms, score: ${scanResult.overallBalanceScore}`);
 
     return NextResponse.json({
       scanId,
       ...scanResult,
     });
   } catch (error: unknown) {
-    console.error('[Analyze] Route error:', error);
+    console.error(`[Analyze] Route error after ${Date.now() - startTime}ms:`, error);
     return NextResponse.json(
       { error: 'Analysis failed. Please try again.' },
       { status: 500 }
