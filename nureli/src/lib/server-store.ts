@@ -52,18 +52,27 @@ export async function getAllUsers(): Promise<StoredUser[]> {
 
 export async function upsertUser(user: { phone: string; name: string; dob: string; sex: string }): Promise<void> {
   const supabase = getSupabase();
-  if (!supabase) return;
+  if (!supabase) {
+    console.warn('[Store] upsertUser skipped — no Supabase client');
+    return;
+  }
 
   try {
-    await supabase.from('users').upsert({
+    const { error } = await supabase.from('users').upsert({
       phone: user.phone,
       name: user.name,
       dob: user.dob,
       sex: user.sex,
       last_login_at: new Date().toISOString(),
     }, { onConflict: 'phone' });
+    
+    if (error) {
+      console.error('[Store] upsertUser Supabase error:', error.message, error.details, error.hint);
+    } else {
+      console.log('[Store] upsertUser success:', user.phone);
+    }
   } catch (e) {
-    console.error('[Store] upsertUser error:', e);
+    console.error('[Store] upsertUser exception:', e);
   }
 }
 
