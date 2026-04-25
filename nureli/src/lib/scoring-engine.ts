@@ -20,6 +20,10 @@ interface AIObservations {
   omega3Hint?: number;
   generalHint?: number;
   confidenceLevel?: string;
+  // New fields from upgraded prompt
+  visualFindings?: Record<string, Record<string, number>>;
+  concordantFindings?: string[];
+  nutrientEvidence?: Record<string, string>;
 }
 
 const FREQUENCY_SCORES: Record<string, number> = {
@@ -237,6 +241,24 @@ function computeDietQualityScore(q: QuestionnairePayload, ai: AIObservations): n
 function generateExplanation(nutrient: NutrientKey, score: number, _q: QuestionnairePayload, ai: AIObservations): string {
   const hasAI = !!(ai.faceAnalysis || ai.eyeAnalysis || ai.handNailAnalysis);
   const confidence = ai.confidenceLevel || 'MODERATE';
+
+  // Use AI-generated evidence if available (much more specific and accurate)
+  const evidenceMap: Record<string, NutrientKey> = {
+    iron: 'ironSupport', b12: 'vitaminB12Support', vitD: 'vitaminDSupport',
+    vitA: 'vitaminASupport', folate: 'folateSupport', zinc: 'zincSupport',
+    protein: 'proteinSupport', hydration: 'hydrationSupport', vitC: 'vitaminCSupport',
+    omega3: 'omega3Support',
+  };
+  
+  if (hasAI && ai.nutrientEvidence) {
+    for (const [evidenceKey, nutrientKey] of Object.entries(evidenceMap)) {
+      if (nutrientKey === nutrient && ai.nutrientEvidence[evidenceKey]) {
+        return `Visual assessment (${confidence} confidence): ${ai.nutrientEvidence[evidenceKey]}`;
+      }
+    }
+  }
+
+  // Fallback to template explanations
   const prefix = hasAI
     ? `Based on visual biomarker analysis (${confidence} confidence): `
     : 'Based on lifestyle assessment: ';
@@ -458,8 +480,12 @@ export function computeScores(
   const recommendations = generateRecommendations(nutrientScores);
 
   const confidence = aiObservations.confidenceLevel || 'MODERATE';
+  const concordantCount = aiObservations.concordantFindings?.length || 0;
+  const concordantNote = concordantCount > 0
+    ? ` ${concordantCount} concordant finding${concordantCount > 1 ? 's' : ''} detected across multiple images, strengthening diagnostic confidence.`
+    : '';
   const confidenceNote = aiObservations.faceAnalysis
-    ? `Clinical visual assessment (${confidence} confidence): This analysis examines 40+ biomarkers across your face, eyes, and hands using AI-powered pattern recognition. Scores reflect predicted nutritional sufficiency based on visible indicators. For clinical diagnosis, consult a healthcare professional.`
+    ? `Clinical visual assessment (${confidence} confidence): This analysis examines 36+ biomarkers across your face, eyes, and hands using AI-powered pattern recognition.${concordantNote} Scores reflect predicted nutritional sufficiency based on visible indicators. For clinical diagnosis, consult a healthcare professional.`
     : 'This assessment is based on your lifestyle questionnaire responses. For more accurate results, complete a visual scan with clear face, eye, and hand photos.';
 
   return {

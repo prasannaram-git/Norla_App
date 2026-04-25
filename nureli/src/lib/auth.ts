@@ -1,3 +1,11 @@
+/**
+ * Authentication utilities.
+ * 
+ * Norla uses custom OTP-based auth (phone + WhatsApp OTP).
+ * This file is kept for potential future Supabase auth integration.
+ * The actual OTP flow uses /api/otp/send and /api/otp/verify routes.
+ */
+
 import { createClient } from './supabase';
 
 function getClient() {
@@ -6,26 +14,7 @@ function getClient() {
   return client;
 }
 
-/** Send OTP to phone number */
-export async function sendOTP(phone: string) {
-  const supabase = getClient();
-  const { error } = await supabase.auth.signInWithOtp({ phone });
-  if (error) throw error;
-}
-
-/** Verify OTP code */
-export async function verifyOTP(phone: string, token: string) {
-  const supabase = getClient();
-  const { data, error } = await supabase.auth.verifyOtp({
-    phone,
-    token,
-    type: 'sms',
-  });
-  if (error) throw error;
-  return data.user;
-}
-
-/** Update user profile metadata after onboarding */
+/** Update user profile metadata (for Supabase auth users only) */
 export async function updateUserProfile(profile: {
   full_name: string;
   date_of_birth: string;

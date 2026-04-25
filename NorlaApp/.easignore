@@ -1,0 +1,21 @@
+# Dependencies (installed on EAS server)
+node_modules/
+
+# Git
+.git/
+
+# IDE
+.idea/
+.vscode/
+
+# Build artifacts
+android/
+ios/
+*.tgz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.log

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from '@/lib/motion';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,10 +10,13 @@ import { LogOut, Phone, ShieldCheck, ChevronRight, Info, Calendar, User, Trash2,
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isDemo, signOut } = useAuth();
+  const { user, norlaUser, isDemo, signOut } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -31,10 +34,8 @@ export default function ProfilePage() {
     try {
       const res = await fetch('/api/user/delete', { method: 'DELETE' });
       if (res.ok) {
-        // Clear all local data
         localStorage.clear();
         sessionStorage.clear();
-        // Redirect to login
         router.push('/login');
       } else {
         const data = await res.json();
@@ -48,10 +49,28 @@ export default function ProfilePage() {
     }
   };
 
-  const displayName = user?.user_metadata?.full_name || 'User';
-  const displayPhone = user?.phone || '+91 0000000000';
-  const displaySex = user?.user_metadata?.sex || '--';
-  const displayDob = user?.user_metadata?.date_of_birth || '--';
+  // Skeleton — identical on server and client
+  if (!mounted) {
+    return (
+      <div className="px-5 py-6 space-y-4 max-w-lg mx-auto">
+        <div className="flex items-center gap-2.5 mb-2">
+          <div className="h-8 w-8 rounded-xl bg-neutral-100 animate-pulse" />
+          <div className="h-4 w-14 rounded bg-neutral-100 animate-pulse" />
+        </div>
+        <div className="h-6 w-16 rounded bg-neutral-100 animate-pulse mb-4" />
+        <div className="rounded-2xl bg-neutral-50 h-[72px] animate-pulse" />
+        <div className="rounded-2xl bg-neutral-50 h-[120px] animate-pulse" />
+        <div className="rounded-2xl bg-neutral-50 h-[100px] animate-pulse" />
+        <div className="rounded-2xl bg-neutral-50 h-[100px] animate-pulse" />
+      </div>
+    );
+  }
+
+  // Use norlaUser (custom OTP auth) as primary source, then Supabase auth metadata as fallback
+  const displayName = norlaUser?.name || user?.user_metadata?.full_name || 'User';
+  const displayPhone = norlaUser?.phone || user?.phone || '+91 0000000000';
+  const displaySex = norlaUser?.sex || user?.user_metadata?.sex || '--';
+  const displayDob = norlaUser?.dob || user?.user_metadata?.date_of_birth || '--';
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
 
   return (

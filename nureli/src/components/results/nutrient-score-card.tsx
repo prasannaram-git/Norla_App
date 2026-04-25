@@ -2,7 +2,7 @@
 
 import { motion } from '@/lib/motion';
 import { NUTRIENT_CONFIG, STATUS_CONFIG } from '@/lib/constants';
-import { Droplets, Zap, Sun, Leaf, Dumbbell, Droplet, Utensils } from 'lucide-react';
+import { Droplets, Zap, Sun, Leaf, Dumbbell, Droplet, Utensils, Eye, Shield, CircleDot, Fish } from 'lucide-react';
 import type { NutrientKey, NutrientScore } from '@/types/scores';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -13,6 +13,10 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?:
   dumbbell: Dumbbell,
   droplet: Droplet,
   utensils: Utensils,
+  eye: Eye,
+  shield: Shield,
+  citrus: CircleDot,  // Lucide doesn't have 'citrus' — CircleDot is closest visual match
+  fish: Fish,
 };
 
 interface NutrientScoreCardProps {

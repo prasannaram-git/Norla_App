@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
-
-const SECRET = new TextEncoder().encode(process.env.ADMIN_JWT_SECRET || 'norla-admin-fallback');
+import { getAdminSecret } from '@/lib/admin-auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +15,7 @@ export async function POST(req: NextRequest) {
     const token = await new SignJWT({ role: 'admin', username })
       .setProtectedHeader({ alg: 'HS256' })
       .setExpirationTime('24h')
-      .sign(SECRET);
+      .sign(getAdminSecret());
 
     return NextResponse.json({ token });
   } catch (err: unknown) {

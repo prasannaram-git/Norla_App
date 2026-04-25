@@ -56,6 +56,21 @@ export function getUserProfile(phone: string): { name: string; phone: string; do
   return users[phone] || null;
 }
 
+/**
+ * Get current user's phone from localStorage session
+ */
+function getCurrentUserPhone(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem('norla_user');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.phone || null;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 // ──── Users ────
 
 export async function createUserDoc(user: User): Promise<void> {
@@ -147,10 +162,25 @@ export async function getScan(scanId: string): Promise<Scan | null> {
     return MOCK_SCAN_HISTORY.find((s) => s.id === scanId) ?? null;
   }
 
-  // Check local storage
+  // Check local storage first (fast, offline-capable)
   const localScans = getLocalScans();
   const local = localScans.find((s) => s.id === scanId);
-  return local || null;
+  if (local) return local;
+
+  // Fallback: check Supabase (handles cleared localStorage, new device)
+  const supabase = getClient();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('scans')
+      .select('*')
+      .eq('id', scanId)
+      .single();
+    if (error || !data) return null;
+    return mapScanRow(data);
+  } catch {
+    return null;
+  }
 }
 
 export async function updateScanResults(
@@ -190,15 +220,82 @@ export async function updateScanResults(
   } catch { /* table may not exist */ }
 }
 
-export async function getUserScans(userId: string): Promise<Scan[]> {
+/**
+ * Get scans for the current user.
+ * 
+ * ZERO-LATENCY STRATEGY:
+ * 1. Return localStorage scans IMMEDIATELY (0ms — no network, no await)
+ * 2. Fire-and-forget: Supabase sync runs in background, saves to localStorage
+ *    for the NEXT time this function is called
+ * 
+ * This is how Google/Instagram/Twitter load data — show cached first, sync later.
+ */
+export function getUserScans(userId: string): Scan[] {
   if (isDemoMode()) return MOCK_SCAN_HISTORY;
 
-  // Get ALL scans from local storage (single user per device)
-  const localScans = getLocalScans();
+  const userPhone = getCurrentUserPhone();
+
+  // Get local scans (INSTANT — no network call, no await)
+  const allLocalScans = getLocalScans();
+
+  // Filter scans belonging to this user only
+  const localScans = allLocalScans.filter((s) => {
+    if (s.userId === userId) return true;
+    if (userPhone && s.userId?.includes(userPhone.replace('+', ''))) return true;
+    return false;
+  });
 
   // Sort by date descending
   localScans.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // FIRE-AND-FORGET: Sync from Supabase in background
+  // Results are saved to localStorage for the NEXT render/page visit
+  if (typeof window !== 'undefined' && userPhone) {
+    _syncScansFromServer(userPhone, allLocalScans).catch(() => {});
+  }
+
   return localScans;
+}
+
+/**
+ * Background sync — fetches scans from Supabase and merges into localStorage.
+ * Never blocks rendering. Results appear on next page load or refresh.
+ */
+async function _syncScansFromServer(userPhone: string, existingLocalScans: Scan[]): Promise<void> {
+  const supabase = getClient();
+  if (!supabase) return;
+
+  try {
+    const queryPromise = supabase
+      .from('scans')
+      .select('*')
+      .eq('user_phone', userPhone)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    // 3-second timeout safety net
+    const timeout = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+      setTimeout(() => resolve({ data: null, error: { message: 'timeout' } }), 3000)
+    );
+
+    const { data, error } = await Promise.race([queryPromise, timeout]);
+
+    if (!error && data && data.length > 0) {
+      const dbScans: Scan[] = data.map(mapScanRow);
+      const localIds = new Set(existingLocalScans.map((s) => s.id));
+      let merged = false;
+      const updatedScans = [...existingLocalScans];
+      for (const dbScan of dbScans) {
+        if (!localIds.has(dbScan.id)) {
+          updatedScans.push(dbScan);
+          merged = true;
+        }
+      }
+      if (merged) {
+        saveLocalScans(updatedScans);
+      }
+    }
+  } catch { /* silent */ }
 }
 
 // ──── Storage (signed URLs for biometric privacy) ────

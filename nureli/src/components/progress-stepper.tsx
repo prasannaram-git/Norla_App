@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
 interface ProgressStepperProps {
@@ -16,11 +15,9 @@ export function ProgressStepper({ steps, currentStep, className }: ProgressStepp
     <div className={cn('w-full', className)}>
       {/* Progress bar */}
       <div className="relative h-[4px] rounded-full bg-neutral-100 overflow-hidden">
-        <motion.div
-          className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-600"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all duration-400 ease-out"
+          style={{ width: `${progress}%` }}
         />
       </div>
 
@@ -39,3 +36,4 @@ export function ProgressStepper({ steps, currentStep, className }: ProgressStepp
     </div>
   );
 }
+

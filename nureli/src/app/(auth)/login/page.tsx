@@ -102,6 +102,8 @@ export default function LoginPage() {
 
   // Verify OTP via our custom API
   const handleVerifyOTP = async () => {
+    // Prevent double-calls (React Strict Mode, fast double-clicks)
+    if (loading) return;
     setError('');
     const code = otp.join('');
     if (code.length !== 6) { setError('Please enter the 6-digit code'); return; }
@@ -114,20 +116,38 @@ export default function LoginPage() {
         body: JSON.stringify({ phone, code }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Invalid code'); return; }
+      if (!res.ok) { setError(data.error || 'Invalid code'); setLoading(false); return; }
 
-      // Check if returning user — skip onboarding if profile exists
       const formatted = getFormattedPhone();
-      const existingProfile = getUserProfile(formatted);
-      if (existingProfile) {
-        // Auto-login returning user
-        localStorage.setItem('norla_user', JSON.stringify(existingProfile));
-        // Sync to server for admin panel
-        fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', data: existingProfile }) }).catch(() => {});
-        router.push('/dashboard');
+
+      // CHECK 1: Server returned existing profile (source of truth — works even if localStorage cleared)
+      // CHECK 2: Fall back to localStorage profile database
+      const serverProfile = data.profile;
+      const localProfile = getUserProfile(formatted);
+      const existingProfile = serverProfile || localProfile;
+
+      if (existingProfile && existingProfile.name) {
+        // Returning user — skip onboarding
+        const profileData = {
+          phone: existingProfile.phone || formatted,
+          name: existingProfile.name,
+          dob: existingProfile.dob || '',
+          sex: existingProfile.sex || '',
+        };
+        // Save to localStorage for future offline access
+        localStorage.setItem('norla_user', JSON.stringify(profileData));
+        // Also save to local profile DB so future logins work offline
+        saveUserProfile(formatted, { name: profileData.name, dob: profileData.dob, sex: profileData.sex });
+        // Sync to server for admin panel (fire-and-forget)
+        fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', data: profileData }) }).catch(() => {});
+        // CRITICAL: Use window.location.href (full page navigation) instead of router.push
+        // router.push does client-side navigation where middleware prefetch may not
+        // carry the newly-set session cookie → causes redirect loop back to /login
+        window.location.href = '/dashboard';
         return;
       }
 
+      // New user — start onboarding
       setStep('name');
     } catch {
       setError('Verification failed. Please try again.');
@@ -160,7 +180,8 @@ export default function LoginPage() {
     // Sync to server for admin panel
     fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', data: profile }) }).catch(() => {});
 
-    router.push('/dashboard');
+    // Full page navigation to ensure session cookie is carried properly
+    window.location.href = '/dashboard';
   };
 
   // OTP input handler

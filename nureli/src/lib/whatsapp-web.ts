@@ -285,22 +285,39 @@ export function getWhatsAppStatus(): Omit<WASlot, 'socket' | 'reconnectTimer'> {
 }
 
 // ── Auto-restore sessions from auth directories on startup ────────
-let _autoRestored = false;
-export async function autoRestoreSessions(): Promise<void> {
-  if (_autoRestored) return;
-  _autoRestored = true;
-  if (!fs.existsSync(AUTH_BASE_DIR)) return;
+declare global {
+  // eslint-disable-next-line no-var
+  var __waAutoRestored: boolean | undefined;
+}
 
+export async function autoRestoreSessions(): Promise<void> {
+  // Use global flag so it persists across HMR module reloads in dev
+  if (global.__waAutoRestored) return;
+  global.__waAutoRestored = true;
+
+  if (!fs.existsSync(AUTH_BASE_DIR)) {
+    console.log('[WhatsApp] No auth directory found — nothing to restore');
+    return;
+  }
+
+  let restored = 0;
   for (let i = 1; i <= MAX_SLOTS; i++) {
     const slotId = `slot-${i}`;
     const authDir = path.join(AUTH_BASE_DIR, slotId);
     // Only reconnect if auth files exist (user previously scanned QR)
     if (fs.existsSync(path.join(authDir, 'creds.json'))) {
       console.log(`[WhatsApp] Auto-restoring ${slotId}...`);
+      restored++;
       connectWhatsAppSlot(slotId).catch((err) => {
         console.error(`[WhatsApp] Auto-restore failed for ${slotId}:`, err);
       });
     }
+  }
+
+  if (restored === 0) {
+    console.log('[WhatsApp] No saved sessions found to restore');
+  } else {
+    console.log(`[WhatsApp] Auto-restore initiated for ${restored} slot(s)`);
   }
 }
 

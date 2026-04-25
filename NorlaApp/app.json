@@ -11,11 +11,12 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0D9488"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.norla.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Norla needs camera access to capture photos for nutrition analysis",
         "NSPhotoLibraryUsageDescription": "Norla needs photo library access to select images for analysis"
@@ -24,20 +25,41 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0D9488"
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.norla.app",
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"],
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "serverUrl": "http://10.129.115.191:3000"
-    },
     "plugins": [
-      "expo-splash-screen"
-    ]
+      "expo-splash-screen",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Norla needs camera access to capture photos for nutrition analysis"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Norla needs photo library access to select images for analysis"
+        }
+      ],
+      "expo-font",
+      "expo-localization"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "de34530d-46e3-423d-bdff-204eb72e5f2b"
+      }
+    },
+    "owner": "norlaapp"
   }
 }

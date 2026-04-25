@@ -3,6 +3,17 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
+  // Allow large request bodies for image uploads (base64 from mobile camera)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '25mb',
+    },
+  },
+
+  // Allow mobile devices on local network to load dev JS/CSS bundles
+  // Without this, Next.js 16 blocks cross-origin dev resources → blank pages on mobile
+  allowedDevOrigins: ['192.168.*.*', '10.*.*.*', '172.16.*.*', '127.0.0.1'],
+
   // Server-side packages that use native bindings — must NOT be bundled
   serverExternalPackages: [
     '@whiskeysockets/baileys',
@@ -22,6 +33,15 @@ const nextConfig: NextConfig = {
 
   async headers() {
     return [
+      {
+        // CORS for API routes (React Native app calls from any origin)
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
       {
         // Service Worker must not be cached by the browser
         source: '/sw.js',

@@ -1,88 +1,70 @@
-// Norla PWA Service Worker
-// Handles caching, offline support, and auto-updates
+// Norla PWA Service Worker v2
+// In development, this SW immediately unregisters itself.
 
-const CACHE_NAME = 'norla-v1';
-const STATIC_ASSETS = [
-  '/logo.png',
-  '/logo-bg.png',
-  '/manifest.json',
-];
+const IS_LOCALHOST = (typeof location !== 'undefined') &&
+  (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
 
-// Install — cache static assets
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
-  // Activate immediately — don't wait for old SW to finish
-  self.skipWaiting();
-});
-
-// Activate — clean old caches
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      );
-    })
-  );
-  // Take control of all clients immediately
-  self.clients.claim();
-});
-
-// Fetch — Network-first strategy for API, Cache-first for static
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') return;
-
-  // Skip API routes — always fetch fresh
-  if (url.pathname.startsWith('/api/')) return;
-
-  // Network-first for pages (HTML) — ensures auto-update
-  if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // Cache the latest version
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => {
-          // Offline fallback — serve from cache
-          return caches.match(event.request).then((cached) => {
-            return cached || caches.match('/dashboard');
-          });
-        })
+// DEVELOPMENT: Self-destruct immediately
+if (IS_LOCALHOST) {
+  self.addEventListener('install', () => { self.skipWaiting(); });
+  self.addEventListener('activate', (event) => {
+    event.waitUntil(
+      self.registration.unregister().then(() => {
+        return self.clients.matchAll();
+      }).then((clients) => {
+        clients.forEach((client) => client.navigate(client.url));
+      })
     );
-    return;
-  }
+  });
+} else {
+  // PRODUCTION: Normal caching behavior
+  const CACHE_NAME = 'norla-v2';
+  const STATIC_ASSETS = ['/logo.png', '/logo-bg.png', '/manifest.json'];
 
-  // Cache-first for static assets (images, fonts, CSS, JS)
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache for next time
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      });
-    })
-  );
-});
-
-// Listen for update messages from the app
-self.addEventListener('message', (event) => {
-  if (event.data === 'SKIP_WAITING') {
+  self.addEventListener('install', (event) => {
+    event.waitUntil(
+      caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    );
     self.skipWaiting();
-  }
-});
+  });
+
+  self.addEventListener('activate', (event) => {
+    event.waitUntil(
+      caches.keys().then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      )
+    );
+    self.clients.claim();
+  });
+
+  self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+    if (event.request.method !== 'GET') return;
+    if (url.pathname.startsWith('/api/')) return;
+
+    // Network-first for pages
+    if (event.request.mode === 'navigate') {
+      event.respondWith(
+        fetch(event.request)
+          .then((r) => { const c = r.clone(); caches.open(CACHE_NAME).then((cache) => cache.put(event.request, c)); return r; })
+          .catch(() => caches.match(event.request).then((c) => c || caches.match('/dashboard')))
+      );
+      return;
+    }
+
+    // Cache-first for assets
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((r) => {
+          if (r.ok) { const c = r.clone(); caches.open(CACHE_NAME).then((cache) => cache.put(event.request, c)); }
+          return r;
+        });
+      })
+    );
+  });
+
+  self.addEventListener('message', (event) => {
+    if (event.data === 'SKIP_WAITING') self.skipWaiting();
+  });
+}

@@ -69,8 +69,18 @@ export async function POST(req: NextRequest) {
       sent = await sendOTPViaWhatsApp(formatted, code);
       method = sent ? 'whatsapp_web' : 'unavailable';
     } catch {
-      // WhatsApp module may not be available in some environments
-      method = 'unavailable';
+      // WhatsApp Web module may not be available in some environments
+    }
+
+    // Fallback: WhatsApp Cloud API (Meta Business Platform)
+    if (!sent) {
+      try {
+        const { sendWhatsAppOTP } = await import('@/lib/whatsapp');
+        sent = await sendWhatsAppOTP(formatted, code);
+        if (sent) method = 'whatsapp_cloud';
+      } catch {
+        // Cloud API not configured
+      }
     }
 
     // Log activity

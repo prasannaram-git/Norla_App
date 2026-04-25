@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   MessageSquare, Wifi, WifiOff, QrCode, RefreshCw,
   Phone, CheckCircle, XCircle, Loader2, Plus, AlertCircle,
@@ -18,21 +19,35 @@ interface WASlot {
 }
 
 export default function AdminSettingsPage() {
+  const router = useRouter();
   const [slots, setSlots] = useState<WASlot[]>([]);
   const [loadingSlot, setLoadingSlot] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
   const pollingRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
+  const getHeaders = useCallback(() => {
+    const token = localStorage.getItem('admin_token');
+    if (!token) {
+      router.push('/admin/login');
+      return null;
+    }
+    return {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+  }, [router]);
 
   const fetchStatus = useCallback(async () => {
+    const headers = getHeaders();
+    if (!headers) return [];
     try {
       const res = await fetch('/api/admin/whatsapp', { headers });
+      if (res.status === 401) {
+        localStorage.removeItem('admin_token');
+        router.push('/admin/login');
+        return [];
+      }
       if (res.ok) {
         const data = await res.json();
         if (data.slots) {
@@ -42,8 +57,7 @@ export default function AdminSettingsPage() {
       }
     } catch { /* ignore */ }
     return [];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [getHeaders, router]);
 
   // Initial fetch
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
@@ -91,6 +105,8 @@ export default function AdminSettingsPage() {
   useEffect(() => { return () => stopPolling(); }, [stopPolling]);
 
   const handleConnect = async (slotId: string) => {
+    const headers = getHeaders();
+    if (!headers) return;
     setLoadingSlot(slotId);
     try {
       const res = await fetch('/api/admin/whatsapp', {
@@ -98,10 +114,10 @@ export default function AdminSettingsPage() {
         headers,
         body: JSON.stringify({ action: 'connect', slotId }),
       });
+      if (res.status === 401) { localStorage.removeItem('admin_token'); router.push('/admin/login'); return; }
       if (res.ok) {
         const data = await res.json();
         setSlots((prev) => prev.map((s) => s.slotId === slotId ? { ...s, ...data } : s));
-        // Start polling immediately after connect
         startPolling();
       } else {
         const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
@@ -112,6 +128,8 @@ export default function AdminSettingsPage() {
   };
 
   const handleDisconnect = async (slotId: string) => {
+    const headers = getHeaders();
+    if (!headers) return;
     setLoadingSlot(slotId);
     try {
       await fetch('/api/admin/whatsapp', {
@@ -187,7 +205,7 @@ export default function AdminSettingsPage() {
 
       {/* Test OTP */}
       <div className="mt-6">
-        <TestOTPSection headers={headers} connectedCount={connectedCount} />
+        <TestOTPSection getHeaders={getHeaders} connectedCount={connectedCount} />
       </div>
     </div>
   );
@@ -332,13 +350,15 @@ function SlotCard({
 }
 
 // ── Test OTP section ────────────────────────────────────────────────
-function TestOTPSection({ headers, connectedCount }: { headers: Record<string, string>; connectedCount: number }) {
+function TestOTPSection({ getHeaders, connectedCount }: { getHeaders: () => Record<string, string> | null; connectedCount: number }) {
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
 
   const handleTest = async () => {
     if (!phone) return;
+    const headers = getHeaders();
+    if (!headers) return;
     setSending(true);
     setStatus('');
     try {

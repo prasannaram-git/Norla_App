@@ -16,17 +16,21 @@ import { createClient } from '@/lib/supabase-server';
  * 4. Clears the session cookie
  */
 export async function DELETE(req: NextRequest) {
-  // Get session info from cookie
-  const sessionCookie = req.cookies.get('norla_session');
-  if (!sessionCookie?.value) {
+  // Get session from cookie OR Authorization header (React Native)
+  const sessionCookie = req.cookies.get('norla_session')?.value;
+  const authHeader = req.headers.get('authorization')?.replace('Bearer ', '');
+  const token = sessionCookie || authHeader;
+
+  if (!token) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   let userPhone: string;
   try {
-    const session = JSON.parse(sessionCookie.value);
-    userPhone = session.phone;
-    if (!userPhone) throw new Error('No phone in session');
+    const { verifySessionToken } = await import('@/lib/session');
+    const phone = await verifySessionToken(token);
+    if (!phone) throw new Error('Invalid token');
+    userPhone = phone;
   } catch {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
   }

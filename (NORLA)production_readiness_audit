@@ -1,0 +1,460 @@
+# Norla — Production Readiness Audit
+
+> **Target:** Play Store launch only | **Pricing:** 100% Free | **Ads:** During Gemini processing | **OTP:** WhatsApp (current system) | **DB:** Free Supabase
+
+---
+
+## Summary
+
+| Category | Critical | Important | Optional | Done |
+|----------|----------|-----------|----------|------|
+| Server & Deployment | 3 | 2 | 1 | ✅ 2 |
+| Security | 3 | 1 | 0 | ✅ 2 |
+| Ads Integration | 2 | 1 | 1 | ❌ 0 |
+| OTP / WhatsApp | 1 | 2 | 0 | ✅ 1 |
+| Database / Supabase | 2 | 1 | 0 | ✅ 1 |
+| App Quality | 1 | 3 | 1 | ✅ 3 |
+| Play Store Requirements | 4 | 2 | 0 | ✅ 2 |
+| Post-Launch | 0 | 3 | 2 | ❌ 0 |
+| **TOTAL** | **16** | **15** | **5** | **11 done** |
+
+---
+
+## 1. Server & Deployment
+
+### ✅ DONE — Render.com Config
+- `render.yaml` exists with correct build/start commands
+- Health check endpoint at `/api/health` exists
+- Region set to Singapore (good for India)
+
+### ✅ DONE — Capacitor Production Sync
+- `capacitor.config.json` points to `https://norla-server.onrender.com`
+- HTTPS enforced, cleartext disabled, debug mode off
+
+### 🔴 CRITICAL — Environment Variables on Render
+
+You must set these in **Render Dashboard → Environment**:
+
+| Variable | Status | Action |
+|----------|--------|--------|
+| `NEXT_PUBLIC_SUPABASE_URL` | ⚠️ Set these | Copy from `.env.local` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ⚠️ Set these | Copy from `.env.local` |
+| `GEMINI_API_KEY` | ⚠️ Set these | Your default key |
+| `ADMIN_USERNAME` | ⚠️ Set these | Change from default! |
+| `ADMIN_PASSWORD` | ⚠️ Set these | **Use a strong password** |
+| `ADMIN_JWT_SECRET` | ⚠️ Must generate | Run: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `NEXT_PUBLIC_APP_URL` | ⚠️ Set after deploy | e.g. `https://norla-server.onrender.com` |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | ⚠️ Set | Your support email |
+| `NEXT_PUBLIC_DEMO_MODE` | Set to `false` | ✅ |
+| `NODE_ENV` | Set to `production` | ✅ In render.yaml |
+
+### 🔴 CRITICAL — Deploy to Render
+
+```bash
+# Push nureli/ folder to GitHub repo
+cd "D:\Desktop\Nureli V1.00\nureli"
+git init
+git add .
+git commit -m "Norla v1.0 production"
+git remote add origin https://github.com/YOUR_USERNAME/norla.git
+git push -u origin main
+
+# Then go to dashboard.render.com → New → Web Service → Connect repo
+```
+
+### 🔴 CRITICAL — UptimeRobot (Keep Server Alive)
+
+Render free tier sleeps after 15 min idle. WhatsApp disconnects → OTP fails.
+
+1. Go to [uptimerobot.com](https://uptimerobot.com) (free)
+2. Add HTTP Monitor → `https://norla-server.onrender.com/api/health`
+3. Interval: **5 minutes**
+
+### 🟡 IMPORTANT — WhatsApp Session Persistence
+
+After deploying, you must reconnect WhatsApp from the Admin Panel:
+1. Open `https://norla-server.onrender.com/admin`
+2. Go to **WhatsApp** tab
+3. Scan QR code with your WhatsApp Business number
+4. Sessions auto-restore on server restart
+
+### 🔵 OPTIONAL — Custom Domain
+
+Buy `norla.app` or `norla.in` and point to Render. Improves trust for Play Store review.
+
+---
+
+## 2. Security
+
+### ✅ DONE — Session Security
+- HMAC-SHA256 signed cookies (tamper-proof)
+- Constant-time comparison (no timing attacks)
+- HTTP-only, secure, SameSite cookies
+
+### ✅ DONE — Input Validation
+- Zod schema validation on analyze payload
+- Rate limiting on OTP (3 per 10 min)
+- Middleware protects all `/dashboard`, `/scan`, `/history`, `/profile` routes
+
+### 🔴 CRITICAL — Change Default Secrets
+
+> [!CAUTION]
+> The current `.env.local` has hardcoded secrets. NEVER use these in production!
+
+| Secret | Current (INSECURE) | Action |
+|--------|-------------------|--------|
+| `ADMIN_PASSWORD` | `Norla@Admin2026` | Change to something unique |
+| `ADMIN_JWT_SECRET` | `norla-admin-secret-key-change-in-production-2026` | Generate random: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| Session HMAC key | Falls back to `ADMIN_JWT_SECRET` | Same as above — will be secure once JWT secret is changed |
+
+### 🔴 CRITICAL — Remove Dev OTP Code Exposure
+
+Currently in `src/app/api/otp/send/route.ts`, dev mode returns OTP in response:
+```typescript
+if (process.env.NODE_ENV === 'development') {
+  return NextResponse.json({ dev_code: code }); // ← Safe, NODE_ENV=production on Render
+}
+```
+✅ This is already safe — `NODE_ENV=production` on Render means this branch never executes. No action needed.
+
+### 🔴 CRITICAL — Verify OTP Code Not Leaked in Production Logs
+
+Check `console.log` in OTP verify route — ensure the OTP code itself is not logged in production. Currently:
+```typescript
+console.log(`[OTP DEV] ${formatted}: ${code}`); // Only in dev branch ✅
+```
+✅ Safe — only in `process.env.NODE_ENV === 'development'` block.
+
+### 🟡 IMPORTANT — Add `SESSION_SECRET` Env Variable
+
+The session HMAC currently uses `ADMIN_JWT_SECRET` as fallback. Better to have a dedicated secret:
+
+Add to Render env vars:
+```
+SESSION_SECRET=<generate-32-byte-hex>
+```
+Then update `src/lib/session.ts` line 13:
+```typescript
+const SECRET = process.env.SESSION_SECRET || process.env.ADMIN_JWT_SECRET || 'fallback';
+```
+
+---
+
+## 3. Ads Integration ⚠️ NEW — NOT YET BUILT
+
+> You want ads to show **while Gemini is processing** (the loading screen between scan submission and results).
+
+### 🔴 CRITICAL — Set Up AdMob Account
+
+1. Go to [admob.google.com](https://admob.google.com)
+2. Create account → Add app → Platform: Android
+3. Package name: `com.norla.app`
+4. Create an **Interstitial Ad Unit** (full-screen ad during loading)
+5. Note your **App ID** and **Ad Unit ID**
+
+### 🔴 CRITICAL — Integrate Ads in Scan Processing Page
+
+The ad should appear on the **scan processing/loading screen** (`src/app/(app)/scan/[id]/processing/page.tsx` or similar).
+
+**Implementation approach:**
+- Use **Google AdMob Interstitial** via `@capacitor-community/admob` plugin
+- Show the interstitial ad WHILE Gemini processes (15-25 seconds is plenty for an ad)
+- Dismiss ad when results are ready
+- If ad fails to load, skip silently (don't block the user)
+
+Files to create/modify:
+| File | Action |
+|------|--------|
+| `package.json` | Add `@capacitor-community/admob` |
+| `capacitor.config.ts` | Add AdMob plugin config with App ID |
+| `android/app/src/main/AndroidManifest.xml` | Add AdMob meta-data tag |
+| New: `src/lib/admob.ts` | AdMob wrapper (init, show interstitial) |
+| `src/app/(app)/scan/new/page.tsx` | Show interstitial after scan submit |
+
+### 🟡 IMPORTANT — Ad Placement Strategy
+
+| Placement | Type | When |
+|-----------|------|------|
+| **Scan processing** | Interstitial (full screen) | While Gemini AI processes (primary revenue) |
+| History page (optional) | Banner (bottom) | When scrolling past results |
+| Results page (optional) | Native/Banner | Below recommendations |
+
+### 🔵 OPTIONAL — AdMob Mediation
+
+Add Facebook Audience Network, Unity Ads as mediation partners to maximize fill rate and revenue.
+
+---
+
+## 4. OTP / WhatsApp
+
+### ✅ DONE — OTP System Working
+- WhatsApp Web (Baileys) sends OTPs
+- Rate limiting: 3 per phone per 10 minutes
+- 6-digit code, verified server-side
+- Dev mode fallback for local testing
+
+### 🟡 IMPORTANT — WhatsApp Connection Monitoring
+
+If WhatsApp disconnects in production, ALL new users can't log in. Set up:
+1. Add an admin notification when WhatsApp disconnects
+2. UptimeRobot keeps server alive (prevents disconnect from sleep)
+3. Check Admin Panel → WhatsApp tab regularly
+
+### 🟡 IMPORTANT — OTP Fallback Plan
+
+If WhatsApp is down, users see "OTP service temporarily unavailable." Consider:
+- **SMS fallback** via Twilio/MSG91 (costs ~₹0.20/OTP)
+- For now: document that admin must reconnect WhatsApp if it drops
+
+---
+
+## 5. Database / Supabase
+
+### ✅ DONE — Schema & RLS
+- Tables: `users`, `otp_codes`, `scans`, `activity_log`, `gemini_api_keys`
+- Account deletion API exists (Play Store requirement)
+
+### 🔴 CRITICAL — Run Supabase Migrations
+
+You have migration files but need to verify they're applied:
+
+```sql
+-- Check if tables exist in your Supabase dashboard → SQL Editor
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = 'public';
+```
+
+Required tables:
+- [x] `users` — phone, name, dob, sex
+- [x] `otp_codes` — phone, code, expires_at  
+- [x] `scans` — scan results
+- [x] `activity_log` — usage tracking
+- [ ] `gemini_api_keys` — if using DB-based keys (currently file-based, OK)
+
+### 🔴 CRITICAL — Enable Row Level Security (RLS)
+
+```sql
+-- In Supabase dashboard → SQL Editor
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE scans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE otp_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
+
+-- Service role key bypasses RLS (used by server)
+-- Anon key has NO access (as intended)
+```
+
+### 🟡 IMPORTANT — Supabase Free Tier Limits
+
+| Resource | Free Limit | Your Usage | Risk |
+|----------|-----------|------------|------|
+| Database | 500MB | Low | ✅ Fine |
+| Auth | 50k MAU | Not used (custom OTP) | ✅ N/A |
+| Storage | 1GB | Not used | ✅ N/A |
+| API | 500K req/month | ~100 users × 30 scans = 3K | ✅ Fine |
+| Realtime | 200 concurrent | Not used | ✅ N/A |
+
+---
+
+## 6. App Quality
+
+### ✅ DONE — Hydration Fixes
+- All pages use `mounted` guard (skeleton → real content)
+- No more render loops or frozen UI
+
+### ✅ DONE — Navigation
+- MobileNav uses `router.push()` with `window.location` fallback
+- Service Worker self-destructs in dev mode
+
+### ✅ DONE — Results Page
+- Clean, professional, medical-grade UI
+- Custom SVG radar chart, score ring
+- No emojis or icons clutter
+
+### 🔴 CRITICAL — Test on Real Android Device
+
+**Must test these flows on your physical phone:**
+- [ ] Login with WhatsApp OTP (production server)
+- [ ] Complete a full scan (3 photos + questionnaire)
+- [ ] View results
+- [ ] Navigate between all tabs
+- [ ] Check History shows past scans
+- [ ] Profile → Sign Out → Sign back in
+- [ ] Profile → Delete Account (test with a throwaway number)
+- [ ] Camera permission prompt works
+- [ ] Photo upload from gallery works
+- [ ] App handles poor network gracefully
+
+### 🟡 IMPORTANT — Offline/Error States
+
+- What happens when Render server is sleeping? (First request takes 30-60s)
+- Add a "Loading server..." splash in the Android app for cold starts
+- What happens when Gemini API fails? (Questionnaire-only fallback exists ✅)
+
+### 🟡 IMPORTANT — App Icon Quality
+
+Current icons are 1.4MB raw PNGs — too large. Use Android Studio's **Image Asset Studio** to generate proper adaptive icons:
+1. Android Studio → `app/res` → Right-click → New → Image Asset
+2. Select `Norla_with_bg_logo.png`
+3. Generates all proper sizes + adaptive icon XML
+
+### 🟡 IMPORTANT — Loading Experience on Cold Start
+
+Render free tier cold start = 30-60 seconds. Users see blank screen. Fix:
+- The Capacitor splash screen (teal, 2s) is too short
+- Increase `launchShowDuration` to 5000ms in `capacitor.config.ts`
+- Or add a "Connecting..." screen in the WebView before content loads
+
+### 🔵 OPTIONAL — App Size Optimization
+Current APK: 17.7MB (acceptable for Play Store, limit is 150MB)
+
+---
+
+## 7. Play Store Requirements
+
+### ✅ DONE — Privacy Policy Page
+- Full privacy policy at `/privacy`
+- Covers data collection, Gemini AI, WhatsApp, Supabase
+- Medical disclaimer included
+
+### ✅ DONE — Account Deletion
+- Delete Account button in Profile page
+- API deletes all user data: scans, OTPs, activity, user record
+- Required by Play Store policy
+
+### 🔴 CRITICAL — Play Store Developer Account
+
+1. Go to [play.google.com/console](https://play.google.com/console)
+2. Pay one-time $25 registration fee
+3. Verify identity (takes 1-3 days)
+4. Create app listing
+
+### 🔴 CRITICAL — Play Store Listing Assets
+
+| Asset | Specs | Status |
+|-------|-------|--------|
+| App icon | 512×512 PNG, 32-bit, no alpha | ⚠️ Generate from logo |
+| Feature graphic | 1024×500 PNG | ⚠️ Create |
+| Phone screenshots | Min 2, 16:9 or 9:16 | ⚠️ Take from real device |
+| Short description | Max 80 chars | ⚠️ Write |
+| Full description | Max 4000 chars | ⚠️ Write |
+| Privacy policy URL | Public URL | ⚠️ `https://norla-server.onrender.com/privacy` |
+| Contact email | Valid email | ⚠️ Set up |
+| Category | Health & Fitness | ✅ |
+| Content rating | Complete questionnaire | ⚠️ Do in console |
+| Target audience | 18+ | ✅ |
+
+**Suggested Store listing:**
+
+```
+Short description (80 chars max):
+AI-powered nutrition insight from visual analysis & lifestyle questions
+
+Full description:
+Norla uses advanced AI (Google Gemini) to analyze your photos and 
+lifestyle questionnaire to provide predicted nutrition support scores.
+
+Features:
+• AI-powered visual analysis of face, eyes, and hands
+• Comprehensive nutrition scoring across 10+ nutrients
+• Personalized recommendations based on your profile
+• Secure WhatsApp OTP login — no passwords needed
+• Complete scan history with trend tracking
+• Professional, medical-grade report format
+
+Important: Norla provides AI-generated predictions for wellness 
+awareness only. It is NOT a medical device and does not provide 
+clinical diagnoses. Always consult a healthcare professional.
+```
+
+### 🔴 CRITICAL — Signed Release APK/AAB
+
+The debug APK cannot be uploaded to Play Store. You need a signed release build:
+1. In Android Studio: Build → Generate Signed Bundle / APK
+2. Create keystore (see Android Build Guide artifact)
+3. Build AAB (preferred by Play Store over APK)
+
+### 🔴 CRITICAL — Data Safety Form
+
+Play Store requires a Data Safety declaration:
+
+| Question | Answer |
+|----------|--------|
+| Does app collect data? | Yes |
+| Data types collected | Phone number, name, DOB, sex, photos, health info |
+| Is data encrypted in transit? | Yes (HTTPS) |
+| Can users request data deletion? | Yes (in-app) |
+| Is data shared with third parties? | Yes (Google Gemini for analysis — processed, not stored) |
+| Is data used for ads? | Yes (after AdMob integration) |
+
+### 🟡 IMPORTANT — App Content Rating
+
+Complete the IARC questionnaire in Play Console. Likely rating: **Everyone** or **Everyone 10+** depending on health content.
+
+### 🟡 IMPORTANT — Target API Level
+
+Play Store requires `targetSdkVersion >= 34` (Android 14). Check:
+```
+android/variables.gradle → targetSdkVersion
+```
+
+---
+
+## 8. Post-Launch
+
+### 🟡 IMPORTANT — Analytics
+
+Track key metrics after launch:
+- Daily active users (Supabase `activity_log` table)
+- Scans per day
+- OTP success rate
+- Gemini API error rate
+
+The Admin Panel already shows this data.
+
+### 🟡 IMPORTANT — Crash Monitoring
+
+Add Firebase Crashlytics (free) to catch Android crashes:
+1. Create Firebase project
+2. Add `google-services.json` to `android/app/`
+3. The build.gradle already has the Google services plugin stub
+
+### 🟡 IMPORTANT — User Feedback Channel
+
+Add a feedback mechanism:
+- Support email in Profile page
+- Or Google Forms link
+- Or in-app feedback form
+
+### 🔵 OPTIONAL — Push Notifications
+- `POST_NOTIFICATIONS` permission already declared
+- Can be used for scan completion reminders
+
+### 🔵 OPTIONAL — App Update Mechanism
+- Use `@capacitor/app` plugin for in-app update prompts
+- Or rely on Play Store auto-updates
+
+---
+
+## Priority Execution Order
+
+> [!IMPORTANT]
+> Do these in this exact order for fastest path to Play Store:
+
+| Step | Task | Time Est |
+|------|------|----------|
+| 1 | Set up Google Play Developer account ($25) | 1-3 days (verification) |
+| 2 | Deploy to Render + set all env vars | 30 min |
+| 3 | Set up UptimeRobot monitor | 5 min |
+| 4 | Reconnect WhatsApp on production server | 10 min |
+| 5 | Test full app flow on Android (OTP → scan → results) | 30 min |
+| 6 | Set up AdMob account + create ad units | 30 min |
+| 7 | Integrate AdMob interstitial ads | 2-3 hours |
+| 8 | Generate proper app icons in Android Studio | 15 min |
+| 9 | Take screenshots from real device | 20 min |
+| 10 | Build signed AAB release | 10 min |
+| 11 | Create Play Store listing + upload AAB | 1 hour |
+| 12 | Complete Data Safety + Content Rating forms | 30 min |
+| 13 | Submit for review | 1-7 days (Google review) |
+
+**Estimated total: ~2 days of work + 1-7 days for Google review**

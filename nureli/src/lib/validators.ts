@@ -28,6 +28,8 @@ export const scanPayloadSchema = z.object({
   faceImage: z.string().min(1, 'Face image is required'),
   eyeImage: z.string().min(1, 'Eye image is required'),
   handImage: z.string().min(1, 'Hand image is required'),
+  leftHandImage: z.string().optional(),
+  rightHandImage: z.string().optional(),
   questionnaire: questionnaireSchema,
 });
 

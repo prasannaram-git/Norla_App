@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Activity, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Activity } from 'lucide-react';
+import { useAdminFetch } from '../admin-hooks';
 
 interface ActivityRow {
   id: string;
@@ -14,20 +14,9 @@ interface ActivityRow {
 }
 
 export default function AdminActivityPage() {
-  const [activity, setActivity] = useState<ActivityRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, refetch } = useAdminFetch<{ activity: ActivityRow[] }>('/api/admin/activity');
 
-  const fetchActivity = () => {
-    setLoading(true);
-    const token = localStorage.getItem('admin_token');
-    fetch('/api/admin/activity', { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((d) => setActivity(d.activity || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { fetchActivity(); }, []);
+  const activity = data?.activity || [];
 
   return (
     <div>
@@ -36,11 +25,7 @@ export default function AdminActivityPage() {
           <h1 className="text-[24px] font-bold text-neutral-900 tracking-tight">Activity Log</h1>
           <p className="text-[13px] text-neutral-400 mt-1">All system activity and events</p>
         </div>
-        <button
-          onClick={fetchActivity}
-          className="flex items-center gap-2 h-10 rounded-xl bg-white px-4 text-[13px] font-semibold text-neutral-600 hover:bg-neutral-100 transition-all"
-          style={{ border: '1px solid rgba(0,0,0,0.08)' }}
-        >
+        <button onClick={refetch} className="flex items-center gap-2 h-9 rounded-xl bg-white px-3 text-[12px] font-semibold text-neutral-500 hover:bg-neutral-100 transition-all" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
         </button>
@@ -50,6 +35,12 @@ export default function AdminActivityPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="h-5 w-5 border-2 border-neutral-200 border-t-neutral-900 rounded-full animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <AlertCircle className="h-6 w-6 text-red-400" />
+            <p className="text-[13px] text-neutral-400">{error}</p>
+            <button onClick={refetch} className="text-[12px] font-semibold text-neutral-900 hover:underline">Retry</button>
           </div>
         ) : activity.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
@@ -62,7 +53,7 @@ export default function AdminActivityPage() {
               <tr className="border-b border-neutral-100">
                 <th className="text-left px-6 py-3.5 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Action</th>
                 <th className="text-left px-6 py-3.5 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">User</th>
-                <th className="text-left px-6 py-3.5 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Details</th>
+                <th className="text-left px-6 py-3.5 text-[11px] font-bold text-neutral-400 uppercase tracking-wider hidden md:table-cell">Details</th>
                 <th className="text-left px-6 py-3.5 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Time</th>
               </tr>
             </thead>
@@ -82,7 +73,7 @@ export default function AdminActivityPage() {
                   <td className="px-6 py-4">
                     <p className="text-[12px] text-neutral-600">{row.user_phone || row.user_id?.slice(0, 12) || '—'}</p>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 hidden md:table-cell">
                     <p className="text-[11px] text-neutral-400 font-mono truncate max-w-xs">
                       {row.details ? JSON.stringify(row.details) : '—'}
                     </p>

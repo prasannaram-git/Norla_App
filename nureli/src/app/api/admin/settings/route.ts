@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
+import { isAdmin } from '@/lib/admin-auth';
 import fs from 'fs';
 import path from 'path';
-
-const SECRET = new TextEncoder().encode(process.env.ADMIN_JWT_SECRET || 'norla-admin-fallback');
-async function isAdmin(req: NextRequest): Promise<boolean> {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return false;
-  try { await jwtVerify(auth.slice(7), SECRET); return true; } catch { return false; }
-}
 
 const SETTINGS_FILE = path.join(process.cwd(), '.norla-data', 'settings.json');
 
