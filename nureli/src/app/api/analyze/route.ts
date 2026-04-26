@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { computeScores } from '@/lib/scoring-engine';
 import { buildAnalysisPrompt, parseGeminiResponse } from '@/lib/gemini-prompt';
-import { getGeminiModelWithFallback } from '@/lib/gemini-keys';
+import { callOpenRouter, MODEL_FALLBACK_CHAIN } from '@/lib/openrouter';
+import { getNextAIKey } from '@/lib/ai-keys';
 import { scanPayloadSchema } from '@/lib/validators';
 import { logActivity, addScan } from '@/lib/server-store';
 import { verifySessionToken } from '@/lib/session';
@@ -9,27 +10,6 @@ import { verifySessionToken } from '@/lib/session';
 // Route segment config
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
-
-// Model fallback chain — different models have independent rate limits
-// gemini-2.5-flash is primary (confirmed working), others as fallback
-const MODEL_FALLBACK_CHAIN = [
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
-  'gemini-2.0-flash',
-];
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-    promise
-      .then((v) => { clearTimeout(timer); resolve(v); })
-      .catch((e) => { clearTimeout(timer); reject(e); });
-  });
-}
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
@@ -66,22 +46,19 @@ export async function POST(req: NextRequest) {
       .map((img) => {
         const match = img!.match(/^data:(.*?);base64,(.*)$/);
         if (!match) return null;
-        return { inlineData: { mimeType: match[1], data: match[2] } };
+        return { mimeType: match[1], data: match[2] };
       })
-      .filter(Boolean) as { inlineData: { mimeType: string; data: string } }[];
+      .filter(Boolean) as { mimeType: string; data: string }[];
 
     const prompt = buildAnalysisPrompt(questionnaire);
 
-    // ── Try Gemini: ONE attempt per model, fail fast ──
-    // Strategy: Try each model ONCE. If it works, great.
-    // If 429/503/timeout, immediately try next model.
-    // Total budget: 120s (must finish before 150s client timeout)
+    // ── Try OpenRouter: ONE attempt per model, fail fast ──
     let aiSuccess = false;
-    const totalBudgetMs = 120000; // 120s hard limit
+    const totalBudgetMs = 115000; // 115s hard limit (leave buffer for response)
 
     for (const modelName of MODEL_FALLBACK_CHAIN) {
       if (aiSuccess) break;
-      
+
       // Check total time budget
       const elapsed = Date.now() - startTime;
       if (elapsed > totalBudgetMs) {
@@ -91,45 +68,47 @@ export async function POST(req: NextRequest) {
 
       // Calculate remaining time for this attempt
       const remainingMs = totalBudgetMs - elapsed;
-      const attemptTimeout = Math.min(80000, remainingMs - 2000); // 80s max, leave 2s buffer
+      const attemptTimeout = Math.min(100000, remainingMs - 2000); // 100s max, leave 2s buffer
       if (attemptTimeout < 10000) {
         console.log(`[Analyze] ${scanId} Not enough time left (${remainingMs}ms) — stopping`);
         break;
       }
 
-      let currentGemini: Awaited<ReturnType<typeof getGeminiModelWithFallback>> | null = null;
+      let currentKey: Awaited<ReturnType<typeof getNextAIKey>> | null = null;
 
       try {
-        console.log(`[Analyze] ${scanId} Trying model: ${modelName} (timeout: ${Math.round(attemptTimeout/1000)}s, elapsed: ${Math.round(elapsed/1000)}s)`);
-        currentGemini = await withTimeout(getGeminiModelWithFallback(modelName), 5000, 'Gemini init');
+        // Get next API key from round-robin pool
+        currentKey = await getNextAIKey();
 
-        console.log(`[Analyze] ${scanId} Sending ${imageParts.length} images via key "${currentGemini.keyName}" model "${modelName}"`);
+        console.log(`[Analyze] ${scanId} Trying model: ${modelName} via key "${currentKey.keyName}" (timeout: ${Math.round(attemptTimeout/1000)}s, elapsed: ${Math.round(elapsed/1000)}s)`);
 
-        const result = await withTimeout(
-          currentGemini.model.generateContent([prompt, ...imageParts]),
+        // Call OpenRouter
+        const responseText = await callOpenRouter(
+          currentKey.apiKey,
+          modelName,
+          prompt,
+          imageParts,
           attemptTimeout,
-          'Gemini generation'
         );
 
-        // SUCCESS
-        currentGemini.onSuccess();
-        const responseText = result.response.text();
-        console.log(`[Analyze] ${scanId} Gemini OK in ${Date.now() - startTime}ms (${responseText.length} chars) via "${currentGemini.keyName}" model "${modelName}"`);
+        // SUCCESS — parse the response
+        await currentKey.onSuccess();
+        console.log(`[Analyze] ${scanId} OpenRouter OK in ${Date.now() - startTime}ms (${responseText.length} chars) via "${currentKey.keyName}" model "${modelName}"`);
 
         const parsed = parseGeminiResponse(responseText);
         if (parsed) {
           aiObservations = parsed;
           aiSuccess = true;
         } else {
-          console.warn(`[Analyze] ${scanId} Gemini returned unparseable response`);
+          console.warn(`[Analyze] ${scanId} OpenRouter returned unparseable response`);
         }
 
       } catch (aiError: unknown) {
         const errMsg = aiError instanceof Error ? aiError.message : 'Unknown';
         console.error(`[Analyze] ${scanId} ${modelName} failed (${Math.round((Date.now()-startTime)/1000)}s): ${errMsg.slice(0, 200)}`);
 
-        if (currentGemini) {
-          currentGemini.onError(errMsg.slice(0, 200));
+        if (currentKey) {
+          await currentKey.onError(errMsg.slice(0, 200));
         }
 
         logActivity('scan_ai_error', sessionPhone, {
@@ -138,17 +117,17 @@ export async function POST(req: NextRequest) {
           model: modelName,
         }).catch(() => {});
 
-        // Move to next model immediately (no delay for 503/timeout)
-        const is429 = errMsg.includes('429') || errMsg.includes('quota');
+        // Brief pause for rate limits, immediate retry for other errors
+        const is429 = errMsg.includes('429') || errMsg.includes('Rate limited');
         if (is429) {
-          await delay(500); // Brief pause only for rate limits
+          await new Promise(r => setTimeout(r, 500));
         }
         continue;
       }
     }
 
     if (!aiSuccess) {
-      console.log(`[Analyze] ${scanId} All Gemini keys failed — using questionnaire-only scoring`);
+      console.log(`[Analyze] ${scanId} All AI attempts failed — using questionnaire-only scoring`);
     }
 
     // Compute scores (90% AI / 10% questionnaire when AI available)

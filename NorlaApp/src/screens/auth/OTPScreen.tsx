@@ -52,7 +52,7 @@ export function OTPScreen({ navigation, route }: Props) {
 
       // Restore scan history from server (merge with local cache)
       try {
-        const serverScans = await fetchScansFromServer();
+        const serverScans = await fetchScansFromServer(res.sessionToken);
         if (serverScans.length > 0) {
           const localScans = await getScans();
           const localIds = new Set(localScans.map(s => s.id));

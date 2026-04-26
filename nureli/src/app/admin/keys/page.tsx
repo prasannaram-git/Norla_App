@@ -94,8 +94,8 @@ export default function AdminKeysPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-[24px] font-bold text-neutral-900 tracking-tight">Gemini API Keys</h1>
-          <p className="text-[13px] text-neutral-400 mt-1">Serial round-robin rotation across all active keys</p>
+          <h1 className="text-[24px] font-bold text-neutral-900 tracking-tight">AI API Keys</h1>
+          <p className="text-[13px] text-neutral-400 mt-1">OpenRouter round-robin rotation across all active keys</p>
         </div>
         <div className="flex gap-2">
           <button onClick={refetch} className="flex items-center gap-2 h-10 rounded-xl bg-white px-3 text-[12px] font-semibold text-neutral-500 hover:bg-neutral-100 transition-all" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
@@ -156,7 +156,7 @@ export default function AdminKeysPage() {
             </div>
             <div>
               <label className="block text-[11px] font-semibold text-neutral-500 mb-1.5 uppercase tracking-wider">API Key</label>
-              <input type="password" value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="AIzaSy..." className="w-full h-11 rounded-xl bg-neutral-50 px-4 text-[13px] text-neutral-900 font-mono outline-none focus:ring-2 focus:ring-neutral-900/10" style={{ border: '1px solid rgba(0,0,0,0.06)' }} />
+              <input type="password" value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="sk-or-v1-..." className="w-full h-11 rounded-xl bg-neutral-50 px-4 text-[13px] text-neutral-900 font-mono outline-none focus:ring-2 focus:ring-neutral-900/10" style={{ border: '1px solid rgba(0,0,0,0.06)' }} />
             </div>
           </div>
           <div className="flex gap-2">
@@ -179,7 +179,7 @@ export default function AdminKeysPage() {
             value={bulkKeys}
             onChange={(e) => setBulkKeys(e.target.value)}
             rows={8}
-            placeholder={"AIzaSyA...\nAIzaSyB...\nAIzaSyC...\n(one key per line)"}
+            placeholder={"sk-or-v1-abc...\nsk-or-v1-def...\nsk-or-v1-ghi...\n(one key per line)"}
             className="w-full rounded-xl bg-neutral-50 px-4 py-3 text-[12px] text-neutral-900 font-mono outline-none focus:ring-2 focus:ring-neutral-900/10 resize-none"
             style={{ border: '1px solid rgba(0,0,0,0.06)' }}
           />
@@ -213,7 +213,7 @@ export default function AdminKeysPage() {
           <div className="rounded-2xl bg-white p-12 text-center" style={{ border: '1px solid rgba(0,0,0,0.06)' }}>
             <Key className="h-8 w-8 text-neutral-300 mx-auto mb-3" />
             <p className="text-[14px] font-semibold text-neutral-700">No API keys configured</p>
-            <p className="text-[12px] text-neutral-400 mt-1">Add up to 15 Gemini API keys for round-robin rotation</p>
+            <p className="text-[12px] text-neutral-400 mt-1">Add OpenRouter API keys for round-robin rotation</p>
           </div>
         ) : (
           <>

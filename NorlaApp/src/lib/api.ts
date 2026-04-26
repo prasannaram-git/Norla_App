@@ -153,7 +153,11 @@ export async function deleteAccount() {
 
 // ── Scan History Restore ──
 
-export async function fetchScansFromServer(): Promise<{
+/**
+ * Fetch scans from server. Accepts an optional session token to bypass
+ * the AsyncStorage read (which may not have flushed yet after login).
+ */
+export async function fetchScansFromServer(sessionToken?: string): Promise<{
   id: string;
   overallBalanceScore: number;
   nutrientScores?: Record<string, any>;
@@ -163,9 +167,35 @@ export async function fetchScansFromServer(): Promise<{
   createdAt: string;
 }[]> {
   try {
-    const res = await request<{ scans: any[] }>('/api/scans', { timeout: 15000 });
-    if (!res.scans || !Array.isArray(res.scans)) return [];
-    return res.scans.map((s: any) => ({
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Use provided token directly (avoids AsyncStorage race condition)
+    if (sessionToken) {
+      headers['Authorization'] = `Bearer ${sessionToken}`;
+    } else {
+      const session = await getSession();
+      if (session?.token) {
+        headers['Authorization'] = `Bearer ${session.token}`;
+      }
+    }
+
+    const res = await fetch(`${SERVER_URL}/api/scans`, {
+      method: 'GET',
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => ({ scans: [] }));
+
+    if (!data.scans || !Array.isArray(data.scans)) return [];
+    return data.scans.map((s: any) => ({
       id: s.id || s.scan_id || `server-${Date.now()}`,
       overallBalanceScore: s.overall_balance_score ?? s.overallBalanceScore ?? 0,
       nutrientScores: s.nutrient_scores ?? s.nutrientScores,
