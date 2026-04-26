@@ -29,12 +29,14 @@ export async function getSession(): Promise<{ token: string; phone: string } | n
 }
 
 export async function clearSession(): Promise<void> {
-  // Only clear auth data — preserve scan history for re-login
+  // Clear ALL user data — scans are restored from server on next login
   await AsyncStorage.multiRemove([
     KEYS.SESSION_TOKEN,
     KEYS.USER_PHONE,
     KEYS.USER_PROFILE,
-    'norla_intro_seen', // Reset intro so slides show before next login
+    KEYS.SCAN_CACHE,
+    'norla_intro_seen',
+    'norla_nutrition_plan',
   ]);
 }
 

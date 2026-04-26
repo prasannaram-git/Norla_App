@@ -6,6 +6,7 @@ import { COLORS, TYPE, SPACING, RADIUS } from '../lib/theme';
 import { getProfile, getScans, canScanToday, type ScanCache } from '../lib/storage';
 import { shouldShowRating } from '../lib/rating';
 import { RatingModal } from '../components/RatingModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export function DashboardScreen() {
   const nav = useNavigation<any>();
@@ -13,16 +14,18 @@ export function DashboardScreen() {
   const [scans, setScans] = useState<ScanCache[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [showRating, setShowRating] = useState(false);
+  const [hasPlan, setHasPlan] = useState(false);
 
   const load = async () => {
     const p = await getProfile();
     if (p?.name) setName(p.name.split(' ')[0]);
     setScans(await getScans());
+    const cached = await AsyncStorage.getItem('norla_nutrition_plan');
+    setHasPlan(!!cached);
   };
 
   useFocusEffect(useCallback(() => {
     load();
-    // Check if we should show rating prompt
     shouldShowRating().then(show => { if (show) setShowRating(true); });
   }, []));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
@@ -77,6 +80,24 @@ export function DashboardScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* ── Nutrition Plan Card ── */}
+        {scans.length > 0 && (
+          <TouchableOpacity
+            style={s.planCard}
+            activeOpacity={0.7}
+            onPress={() => nav.navigate('NutritionPlan' as any)}
+          >
+            <View style={s.planIconBg}>
+              <Text style={s.planIcon}>🥗</Text>
+            </View>
+            <View style={s.planContent}>
+              <Text style={s.planTitle}>{hasPlan ? 'Your Nutrition Plan' : 'Get Your Nutrition Plan'}</Text>
+              <Text style={s.planSub}>{hasPlan ? 'Tap to view your personalized daily meal plan' : 'AI-powered daily meal plan based on your scan'}</Text>
+            </View>
+            <Text style={s.planChevron}>›</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Separator */}
         <View style={s.separator} />
 
@@ -111,7 +132,6 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.white },
   scroll: { paddingHorizontal: SPACING.xxl, paddingBottom: 40 },
 
-
   greeting: { fontSize: 15, color: COLORS.textTertiary },
   name: { fontSize: 32, fontWeight: '700', color: COLORS.text, letterSpacing: -0.8, marginBottom: 32 },
 
@@ -121,9 +141,26 @@ const s = StyleSheet.create({
   statLabel: { fontSize: 12, color: COLORS.textTertiary, marginTop: 4 },
   statDivider: { width: 1, height: 32, backgroundColor: COLORS.hairline },
 
-  cta: { backgroundColor: COLORS.text, borderRadius: RADIUS.md, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 32 },
+  cta: { backgroundColor: COLORS.text, borderRadius: RADIUS.md, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 14 },
   ctaTitle: { fontSize: 17, fontWeight: '600', color: COLORS.white },
   ctaSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+
+  // Nutrition Plan Card
+  planCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F0FDF4', borderRadius: RADIUS.md,
+    paddingHorizontal: 16, paddingVertical: 16, marginBottom: 28,
+    borderWidth: 1, borderColor: '#D1FAE5',
+  },
+  planIconBg: {
+    width: 44, height: 44, borderRadius: 12, backgroundColor: '#DCFCE7',
+    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+  },
+  planIcon: { fontSize: 22 },
+  planContent: { flex: 1 },
+  planTitle: { fontSize: 15, fontWeight: '600', color: '#166534' },
+  planSub: { fontSize: 12, color: '#16A34A', marginTop: 2 },
+  planChevron: { fontSize: 22, color: '#86EFAC', fontWeight: '300' },
 
   separator: { height: 1, backgroundColor: COLORS.hairline, marginBottom: 20 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },

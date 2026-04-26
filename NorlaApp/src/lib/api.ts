@@ -219,4 +219,37 @@ export async function checkHealth() {
   return request<{ status: string }>('/api/health', { timeout: 10000 });
 }
 
+// ── Nutrition Plan ──
+
+export async function generateNutritionPlan(payload: {
+  nutrientScores: Record<string, any>;
+  userAge?: number;
+  userSex?: string;
+  foodPattern?: string;
+}) {
+  return request<{
+    success: boolean;
+    plan: {
+      planDate: string;
+      summary: string;
+      targetNutrients: string[];
+      meals: {
+        breakfast: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
+        midMorning: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
+        lunch: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
+        evening: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
+        dinner: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
+      };
+      hydration: string;
+      tips: string[];
+    };
+    generatedAt: string;
+    processingTime: number;
+  }>('/api/nutrition-plan', {
+    method: 'POST',
+    body: payload,
+    timeout: 90000,
+  });
+}
+
 export { ApiError };

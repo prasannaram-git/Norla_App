@@ -6,6 +6,7 @@ import { AuthStack } from './AuthStack';
 import { MainTabs } from './MainTabs';
 import { ResultsScreen } from '../screens/ResultsScreen';
 import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
+import { NutritionPlanScreen } from '../screens/NutritionPlanScreen';
 import { getSession, getProfile } from '../lib/storage';
 import { COLORS } from '../lib/theme';
 
@@ -14,6 +15,7 @@ export type RootStackParamList = {
   Main: undefined;
   Results: { scanData: any };
   PrivacyPolicy: undefined;
+  NutritionPlan: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -50,6 +52,7 @@ export function AppNavigator() {
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="Results" component={ResultsScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="NutritionPlan" component={NutritionPlanScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="Auth" component={AuthStack} />
           </>
         ) : (
@@ -58,6 +61,7 @@ export function AppNavigator() {
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="Results" component={ResultsScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="NutritionPlan" component={NutritionPlanScreen} options={{ animation: 'slide_from_right' }} />
           </>
         )}
       </Stack.Navigator>
