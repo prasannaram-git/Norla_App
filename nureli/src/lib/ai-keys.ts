@@ -145,11 +145,17 @@ export async function readAllKeys(forceRefresh = false): Promise<AIKey[]> {
     return supabaseKeys;
   }
 
-  // 2. Try file
+  // 2. Try file (and auto-sync to Supabase if found)
   const fileKeys = readKeysFromFile();
   if (fileKeys.length > 0) {
     cachedKeys = fileKeys;
     cacheTimestamp = Date.now();
+    // AUTO-SYNC: File keys exist but Supabase is empty → push to Supabase
+    // This handles the migration from file-only (old code) to Supabase (new code)
+    console.log(`[AIKeys] Found ${fileKeys.length} keys in file, syncing to Supabase...`);
+    for (const key of fileKeys) {
+      await upsertKeyToSupabase(key);
+    }
     return fileKeys;
   }
 
