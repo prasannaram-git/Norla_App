@@ -31,6 +31,8 @@ export const scanPayloadSchema = z.object({
   leftHandImage: z.string().optional(),
   rightHandImage: z.string().optional(),
   questionnaire: questionnaireSchema,
+  userAge: z.number().min(1).max(120).optional(),
+  userSex: z.string().optional(),
 });
 
 export type QuestionnaireFormData = z.infer<typeof questionnaireSchema>;

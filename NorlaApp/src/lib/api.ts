@@ -87,6 +87,8 @@ export async function submitScan(payload: {
   leftHandImage: string;
   rightHandImage: string;
   questionnaire: Record<string, any>;
+  userAge?: number;
+  userSex?: string;
 }) {
   return request<{
     scanId: string;
@@ -106,6 +108,8 @@ export async function submitScan(payload: {
       leftHandImage: payload.leftHandImage,
       rightHandImage: payload.rightHandImage,
       questionnaire: payload.questionnaire,
+      userAge: payload.userAge,
+      userSex: payload.userSex,
     },
     timeout: 150000,
   });

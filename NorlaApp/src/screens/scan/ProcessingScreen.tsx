@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SPACING, RADIUS } from '../../lib/theme';
 import { submitScan, syncScanToServer } from '../../lib/api';
-import { addScanToCache, getSession } from '../../lib/storage';
+import { addScanToCache, getSession, getProfile } from '../../lib/storage';
 import { SERVER_URL } from '../../lib/constants';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -69,12 +69,31 @@ export function ProcessingScreen({ route }: Props) {
         return;
       }
 
+      // Include user demographics (age, sex) for clinical analysis
+      const profile = await getProfile();
+      let userAge: number | undefined;
+      let userSex: string | undefined;
+      if (profile) {
+        userSex = profile.sex;
+        if (profile.dob) {
+          const birthDate = new Date(profile.dob);
+          const today = new Date();
+          userAge = today.getFullYear() - birthDate.getFullYear();
+          const m = today.getMonth() - birthDate.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            userAge--;
+          }
+        }
+      }
+
       const result = await submitScan({
         faceImage: images.face,
         eyeImage: images.eye,
         leftHandImage: images.leftHand,
         rightHandImage: images.rightHand,
         questionnaire,
+        userAge,
+        userSex,
       });
 
       const scanData = {

@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request data', details: issues }, { status: 400 });
     }
 
-    const { faceImage, eyeImage, handImage, leftHandImage, rightHandImage, questionnaire } = parseResult.data;
+    const { faceImage, eyeImage, handImage, leftHandImage, rightHandImage, questionnaire, userAge, userSex } = parseResult.data;
 
     const sessionCookie = req.cookies.get('norla_session')?.value;
     const authHeader = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       })
       .filter(Boolean) as { mimeType: string; data: string }[];
 
-    const prompt = buildAnalysisPrompt(questionnaire);
+    const prompt = buildAnalysisPrompt(questionnaire, userAge, userSex);
 
     // ── Try OpenRouter: ONE attempt per model, fail fast ──
     let aiSuccess = false;
