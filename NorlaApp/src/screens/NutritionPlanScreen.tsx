@@ -9,17 +9,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PLAN_CACHE_KEY = 'norla_nutrition_plan';
 
-const MEAL_ICONS: Record<string, { emoji: string; label: string; color: string; bg: string }> = {
-  breakfast: { emoji: '🌅', label: 'Breakfast', color: '#F59E0B', bg: '#FFFBEB' },
-  midMorning: { emoji: '🍵', label: 'Mid-Morning', color: '#8B5CF6', bg: '#F5F3FF' },
-  lunch: { emoji: '☀️', label: 'Lunch', color: '#10B981', bg: '#F0FDF4' },
-  evening: { emoji: '🍎', label: 'Evening Snack', color: '#F97316', bg: '#FFF7ED' },
-  dinner: { emoji: '🌙', label: 'Dinner', color: '#3B82F6', bg: '#EFF6FF' },
-};
-
-const NUTRIENT_EMOJI: Record<string, string> = {
-  iron: '🩸', b12: '🧬', vitD: '☀️', vitA: '👁️', folate: '🥬',
-  zinc: '⚡', protein: '💪', hydration: '💧', vitC: '🍊', omega3: '🐟',
+const MEAL_META: Record<string, { label: string; accent: string }> = {
+  breakfast: { label: 'Breakfast', accent: COLORS.brand },
+  midMorning: { label: 'Mid-Morning', accent: '#8B5CF6' },
+  lunch: { label: 'Lunch', accent: '#3B82F6' },
+  evening: { label: 'Evening', accent: '#F59E0B' },
+  dinner: { label: 'Dinner', accent: COLORS.text },
 };
 
 interface PlanData {
@@ -36,28 +31,19 @@ export function NutritionPlanScreen() {
   const [plan, setPlan] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [latestScan, setLatestScan] = useState<ScanCache | null>(null);
   const spinAnim = useState(() => new Animated.Value(0))[0];
 
-  useEffect(() => {
-    loadCachedPlan();
-  }, []);
+  useEffect(() => { loadCachedPlan(); }, []);
 
   useEffect(() => {
     if (loading) {
-      Animated.loop(Animated.timing(spinAnim, { toValue: 1, duration: 1200, easing: Easing.linear, useNativeDriver: true })).start();
-    } else {
-      spinAnim.setValue(0);
-    }
+      Animated.loop(Animated.timing(spinAnim, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true })).start();
+    } else { spinAnim.setValue(0); }
   }, [loading]);
 
   async function loadCachedPlan() {
-    const scans = await getScans();
-    if (scans.length > 0) setLatestScan(scans[0]);
     const cached = await AsyncStorage.getItem(PLAN_CACHE_KEY);
-    if (cached) {
-      try { setPlan(JSON.parse(cached)); } catch {}
-    }
+    if (cached) { try { setPlan(JSON.parse(cached)); } catch {} }
   }
 
   async function handleGenerate() {
@@ -65,14 +51,8 @@ export function NutritionPlanScreen() {
     setError('');
     try {
       const scans = await getScans();
-      if (scans.length === 0) {
-        setError('Complete a scan first to get a personalized plan.');
-        setLoading(false);
-        return;
-      }
+      if (scans.length === 0) { setError('Complete a scan first to get a personalized plan.'); setLoading(false); return; }
       const latest = scans[0];
-      setLatestScan(latest);
-
       const profile = await getProfile();
       let userAge: number | undefined;
       let userSex: string | undefined;
@@ -86,46 +66,36 @@ export function NutritionPlanScreen() {
           if (m < 0 || (m === 0 && now.getDate() < bd.getDate())) userAge--;
         }
       }
-
-      // Flatten nutrient scores
       const scores: Record<string, number> = {};
       if (latest.nutrientScores) {
         for (const [k, v] of Object.entries(latest.nutrientScores)) {
           scores[k] = typeof v === 'object' ? ((v as any).score ?? v) : v as number;
         }
       }
-
-      const result = await generateNutritionPlan({
-        nutrientScores: scores,
-        userAge,
-        userSex,
-        foodPattern: undefined, // Could be enhanced later
-      });
-
+      const result = await generateNutritionPlan({ nutrientScores: scores, userAge, userSex });
       if (result.plan) {
         setPlan(result.plan);
         await AsyncStorage.setItem(PLAN_CACHE_KEY, JSON.stringify(result.plan));
       }
-    } catch (e: any) {
-      setError(e.message || 'Failed to generate plan. Please try again.');
-    }
+    } catch (e: any) { setError(e.message || 'Failed to generate plan.'); }
     setLoading(false);
   }
 
-  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
+  // ── Empty State ──
   if (!plan && !loading) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
         <ScrollView contentContainerStyle={s.emptyScroll}>
-          <TouchableOpacity style={s.backBtn} onPress={() => nav.goBack()}>
-            <Text style={s.backText}>← Back</Text>
+          <TouchableOpacity style={s.backRow} onPress={() => nav.goBack()} activeOpacity={0.6}>
+            <Text style={s.backText}>‹ Back</Text>
           </TouchableOpacity>
           <View style={s.emptyCenter}>
-            <Text style={s.emptyEmoji}>🥗</Text>
+            <View style={s.emptyIcon}>
+              <Text style={s.emptyIconLetter}>N</Text>
+            </View>
             <Text style={s.emptyTitle}>Your Nutrition Plan</Text>
             <Text style={s.emptyDesc}>
-              Get a personalized daily meal plan based on your latest scan results. AI will recommend specific foods and quantities to address your nutritional needs.
+              Get a personalized daily meal plan based on your latest scan. Our AI nutritionist will recommend specific foods to address your needs.
             </Text>
             {error ? <Text style={s.errorText}>{error}</Text> : null}
             <TouchableOpacity style={s.generateBtn} onPress={handleGenerate} activeOpacity={0.8}>
@@ -137,19 +107,22 @@ export function NutritionPlanScreen() {
     );
   }
 
+  // ── Loading State ──
   if (loading) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={s.loadingCenter}>
-          <Animated.Text style={[s.loadingEmoji, { transform: [{ rotate: spin }] }]}>🍽️</Animated.Text>
+          <Animated.View style={[s.loadingRing, { transform: [{ rotate: spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]}>
+            <View style={s.loadingDot} />
+          </Animated.View>
           <Text style={s.loadingTitle}>Creating Your Plan</Text>
-          <Text style={s.loadingDesc}>Our AI nutritionist is designing a personalized meal plan for you...</Text>
-          <ActivityIndicator size="small" color={COLORS.brand} style={{ marginTop: 20 }} />
+          <Text style={s.loadingDesc}>Analyzing your nutritional profile and designing a personalized meal plan...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  // ── Plan View ──
   const mealOrder = ['breakfast', 'midMorning', 'lunch', 'evening', 'dinner'];
 
   return (
@@ -157,24 +130,25 @@ export function NutritionPlanScreen() {
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Header */}
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => nav.goBack()}>
-            <Text style={s.backText}>← Back</Text>
+        <View style={s.headerRow}>
+          <TouchableOpacity onPress={() => nav.goBack()} activeOpacity={0.6}>
+            <Text style={s.backText}>‹ Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleGenerate}>
-            <Text style={s.refreshText}>↻ Refresh</Text>
+          <TouchableOpacity onPress={handleGenerate} activeOpacity={0.6}>
+            <Text style={s.refreshBtn}>Refresh</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={s.pageTitle}>Your Daily Plan</Text>
+        <Text style={s.pageTitle}>Daily Plan</Text>
         <Text style={s.pageSub}>{plan!.summary}</Text>
 
         {/* Target Nutrients */}
-        {plan!.targetNutrients && plan!.targetNutrients.length > 0 && (
+        {plan!.targetNutrients?.length > 0 && (
           <View style={s.targetsRow}>
+            <Text style={s.targetsLabel}>FOCUS</Text>
             {plan!.targetNutrients.slice(0, 4).map((n, i) => (
               <View key={i} style={s.targetPill}>
-                <Text style={s.targetText}>{NUTRIENT_EMOJI[n] || '🎯'} {n}</Text>
+                <Text style={s.targetText}>{n}</Text>
               </View>
             ))}
           </View>
@@ -183,28 +157,26 @@ export function NutritionPlanScreen() {
         {/* Meal Cards */}
         {mealOrder.map(mealKey => {
           const meal = plan!.meals?.[mealKey];
-          if (!meal || !meal.items?.length) return null;
-          const meta = MEAL_ICONS[mealKey] || { emoji: '🍽️', label: mealKey, color: '#666', bg: '#F5F5F5' };
+          if (!meal?.items?.length) return null;
+          const meta = MEAL_META[mealKey] || { label: mealKey, accent: COLORS.text };
 
           return (
-            <View key={mealKey} style={[s.mealCard, { borderLeftColor: meta.color }]}>
+            <View key={mealKey} style={s.mealCard}>
               <View style={s.mealHeader}>
-                <View style={[s.mealIconBg, { backgroundColor: meta.bg }]}>
-                  <Text style={s.mealEmoji}>{meta.emoji}</Text>
-                </View>
+                <View style={[s.mealDot, { backgroundColor: meta.accent }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[s.mealTitle, { color: meta.color }]}>{meta.label}</Text>
+                  <Text style={s.mealTitle}>{meta.label}</Text>
                   <Text style={s.mealTime}>{meal.time}</Text>
                 </View>
               </View>
 
               {meal.items.map((item, idx) => (
-                <View key={idx} style={[s.foodItem, idx > 0 && s.foodItemBorder]}>
-                  <View style={s.foodMain}>
+                <View key={idx} style={[s.foodItem, idx > 0 && s.foodDivider]}>
+                  <View style={s.foodRow}>
                     <Text style={s.foodName}>{item.food}</Text>
                     <Text style={s.foodQty}>{item.quantity}</Text>
                   </View>
-                  <Text style={s.foodBenefit}>{NUTRIENT_EMOJI[item.nutrient] || '•'} {item.benefit}</Text>
+                  <Text style={s.foodBenefit}>{item.benefit}</Text>
                 </View>
               ))}
             </View>
@@ -214,27 +186,26 @@ export function NutritionPlanScreen() {
         {/* Hydration */}
         {plan!.hydration && (
           <View style={s.hydrationCard}>
-            <Text style={s.hydrationTitle}>💧 Hydration</Text>
+            <Text style={s.hydrationLabel}>HYDRATION</Text>
             <Text style={s.hydrationText}>{plan!.hydration}</Text>
           </View>
         )}
 
         {/* Tips */}
-        {plan!.tips && plan!.tips.length > 0 && (
+        {plan!.tips?.length > 0 && (
           <View style={s.tipsCard}>
-            <Text style={s.tipsTitle}>💡 Daily Tips</Text>
+            <Text style={s.tipsLabel}>DAILY TIPS</Text>
             {plan!.tips.map((tip, i) => (
               <View key={i} style={s.tipRow}>
-                <Text style={s.tipNum}>{i + 1}</Text>
+                <View style={s.tipDot} />
                 <Text style={s.tipText}>{tip}</Text>
               </View>
             ))}
           </View>
         )}
 
-        {/* Disclaimer */}
         <Text style={s.disclaimer}>
-          This plan is AI-generated for wellness awareness only. Consult a healthcare professional before making dietary changes.
+          This plan is AI-generated for wellness awareness only.{'\n'}Consult a healthcare professional before making dietary changes.
         </Text>
 
       </ScrollView>
@@ -243,77 +214,81 @@ export function NutritionPlanScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8FAFB' },
-  scroll: { paddingHorizontal: 20, paddingBottom: 40 },
-  emptyScroll: { paddingHorizontal: 20, flex: 1 },
+  safe: { flex: 1, backgroundColor: COLORS.white },
+  scroll: { paddingHorizontal: SPACING.xxl, paddingBottom: 40 },
+  emptyScroll: { paddingHorizontal: SPACING.xxl, flex: 1 },
 
-  // Back button
-  backBtn: { paddingVertical: 12 },
-  backText: { fontSize: 15, fontWeight: '500', color: COLORS.textSecondary },
-  refreshText: { fontSize: 14, fontWeight: '600', color: COLORS.brand },
+  // Back / Header
+  backRow: { paddingVertical: 12 },
+  backText: { fontSize: 16, fontWeight: '500', color: COLORS.textTertiary },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
+  refreshBtn: { fontSize: 14, fontWeight: '600', color: COLORS.brand },
 
-  // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-  pageTitle: { fontSize: 28, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.6, marginBottom: 6 },
-  pageSub: { fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 16 },
+  // Page
+  pageTitle: { fontSize: 32, fontWeight: '700', color: COLORS.text, letterSpacing: -0.8, marginBottom: 6 },
+  pageSub: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 20, marginBottom: 20 },
 
   // Targets
-  targetsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  targetPill: { backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
-  targetText: { fontSize: 12, fontWeight: '600', color: '#92400E' },
+  targetsRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 24, gap: 8 },
+  targetsLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textQuaternary, letterSpacing: 1, marginRight: 4 },
+  targetPill: { backgroundColor: COLORS.bgSecondary, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14 },
+  targetText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
 
   // Meal cards
   mealCard: {
-    backgroundColor: '#FFF', borderRadius: 16, padding: 18, marginBottom: 14,
-    borderLeftWidth: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md,
+    padding: 18, marginBottom: 10,
   },
   mealHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  mealIconBg: { width: 42, height: 42, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  mealEmoji: { fontSize: 20 },
-  mealTitle: { fontSize: 16, fontWeight: '700', letterSpacing: -0.3 },
-  mealTime: { fontSize: 12, color: '#999', marginTop: 2 },
+  mealDot: { width: 8, height: 8, borderRadius: 4, marginRight: 12 },
+  mealTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, letterSpacing: -0.3 },
+  mealTime: { fontSize: 12, color: COLORS.textTertiary, marginTop: 1 },
 
   // Food items
   foodItem: { paddingVertical: 10 },
-  foodItemBorder: { borderTopWidth: 1, borderTopColor: '#F5F5F5' },
-  foodMain: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  foodName: { fontSize: 15, fontWeight: '600', color: '#1A1A1A', flex: 1 },
-  foodQty: { fontSize: 13, fontWeight: '700', color: '#10B981', backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' },
-  foodBenefit: { fontSize: 12, color: '#888', lineHeight: 17 },
+  foodDivider: { borderTopWidth: 1, borderTopColor: COLORS.hairline },
+  foodRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 },
+  foodName: { fontSize: 15, fontWeight: '600', color: COLORS.text, flex: 1 },
+  foodQty: { fontSize: 13, fontWeight: '600', color: COLORS.brand, marginLeft: 8 },
+  foodBenefit: { fontSize: 12, color: COLORS.textTertiary, lineHeight: 17 },
 
   // Hydration
-  hydrationCard: {
-    backgroundColor: '#EFF6FF', borderRadius: 16, padding: 18, marginBottom: 14,
-  },
-  hydrationTitle: { fontSize: 16, fontWeight: '700', color: '#1E40AF', marginBottom: 8 },
-  hydrationText: { fontSize: 14, color: '#3B82F6', lineHeight: 20 },
+  hydrationCard: { backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md, padding: 18, marginBottom: 10 },
+  hydrationLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textQuaternary, letterSpacing: 1, marginBottom: 8 },
+  hydrationText: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 },
 
   // Tips
-  tipsCard: {
-    backgroundColor: '#FFF', borderRadius: 16, padding: 18, marginBottom: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
-  },
-  tipsTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A', marginBottom: 12 },
-  tipRow: { flexDirection: 'row', marginBottom: 10 },
-  tipNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#F0FDF4', textAlign: 'center', lineHeight: 22, fontSize: 11, fontWeight: '700', color: '#10B981', marginRight: 10 },
-  tipText: { flex: 1, fontSize: 13, color: '#555', lineHeight: 19 },
+  tipsCard: { backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md, padding: 18, marginBottom: 10 },
+  tipsLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textQuaternary, letterSpacing: 1, marginBottom: 12 },
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  tipDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: COLORS.brand, marginTop: 6, marginRight: 10 },
+  tipText: { flex: 1, fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
 
   // Empty state
   emptyCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
-  emptyEmoji: { fontSize: 56, marginBottom: 16 },
-  emptyTitle: { fontSize: 24, fontWeight: '700', color: '#1A1A1A', marginBottom: 8 },
-  emptyDesc: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 21, marginBottom: 24, maxWidth: 300 },
-  errorText: { fontSize: 13, color: '#EF4444', marginBottom: 12, textAlign: 'center' },
-  generateBtn: { backgroundColor: '#1A1A1A', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 40 },
-  generateBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  emptyIcon: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.text,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 20,
+  },
+  emptyIconLetter: { fontSize: 28, fontWeight: '700', color: COLORS.white },
+  emptyTitle: { fontSize: 24, fontWeight: '700', color: COLORS.text, letterSpacing: -0.5, marginBottom: 8 },
+  emptyDesc: { fontSize: 14, color: COLORS.textTertiary, textAlign: 'center', lineHeight: 21, marginBottom: 28, maxWidth: 300 },
+  errorText: { fontSize: 13, color: COLORS.error, marginBottom: 12, textAlign: 'center' },
+  generateBtn: { backgroundColor: COLORS.text, borderRadius: RADIUS.md, paddingVertical: 16, paddingHorizontal: 44 },
+  generateBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.white },
 
   // Loading
   loadingCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30 },
-  loadingEmoji: { fontSize: 48, marginBottom: 20 },
-  loadingTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A', marginBottom: 8 },
-  loadingDesc: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20 },
+  loadingRing: {
+    width: 56, height: 56, borderRadius: 28,
+    borderWidth: 3, borderColor: COLORS.hairline,
+    borderTopColor: COLORS.brand,
+    marginBottom: 24,
+  },
+  loadingDot: { position: 'absolute', top: -3, right: 22, width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.brand },
+  loadingTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, letterSpacing: -0.4, marginBottom: 8 },
+  loadingDesc: { fontSize: 14, color: COLORS.textTertiary, textAlign: 'center', lineHeight: 20 },
 
   // Disclaimer
-  disclaimer: { fontSize: 11, color: '#BBB', textAlign: 'center', marginTop: 8, lineHeight: 16, paddingHorizontal: 20 },
+  disclaimer: { fontSize: 11, color: COLORS.textQuaternary, textAlign: 'center', marginTop: 16, lineHeight: 16 },
 });

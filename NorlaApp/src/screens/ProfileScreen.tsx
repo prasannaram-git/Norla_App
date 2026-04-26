@@ -1,13 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, CommonActions } from '@react-navigation/native';
 import { COLORS, SPACING, RADIUS } from '../lib/theme';
 import { getProfile, clearSession, getScans, type UserProfile, type ScanCache } from '../lib/storage';
 import { deleteAccount } from '../lib/api';
 import { APP_VERSION } from '../lib/constants';
-
-const { width: SW } = Dimensions.get('window');
 
 function formatDob(dob: string): string {
   if (!dob) return '--';
@@ -17,34 +15,16 @@ function formatDob(dob: string): string {
   let age = now.getFullYear() - d.getFullYear();
   const m = now.getMonth() - d.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} (${age} yrs)`;
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} · ${age} years`;
 }
 
-function scoreColor(s: number) {
-  if (s >= 75) return '#22C55E';
-  if (s >= 50) return '#EAB308';
-  if (s >= 30) return '#F97316';
-  return '#EF4444';
-}
+const scoreColor = (s: number) => s >= 75 ? COLORS.brand : s >= 50 ? '#EAB308' : s >= 30 ? '#F97316' : '#EF4444';
+const statusLabel = (s: number) => s >= 75 ? 'Good' : s >= 50 ? 'Fair' : s >= 30 ? 'Low' : 'Critical';
 
-function statusLabel(s: number) {
-  if (s >= 75) return { text: 'Good', color: '#22C55E', bg: '#F0FDF4' };
-  if (s >= 50) return { text: 'Fair', color: '#EAB308', bg: '#FEFCE8' };
-  if (s >= 30) return { text: 'Low', color: '#F97316', bg: '#FFF7ED' };
-  return { text: 'Critical', color: '#EF4444', bg: '#FEF2F2' };
-}
-
-const NUTRIENT_LABELS: Record<string, { name: string; emoji: string }> = {
-  iron: { name: 'Iron', emoji: '🩸' },
-  b12: { name: 'Vitamin B12', emoji: '🧬' },
-  vitD: { name: 'Vitamin D', emoji: '☀️' },
-  vitA: { name: 'Vitamin A', emoji: '👁️' },
-  folate: { name: 'Folate', emoji: '🥬' },
-  zinc: { name: 'Zinc', emoji: '⚡' },
-  protein: { name: 'Protein', emoji: '💪' },
-  hydration: { name: 'Hydration', emoji: '💧' },
-  vitC: { name: 'Vitamin C', emoji: '🍊' },
-  omega3: { name: 'Omega-3', emoji: '🐟' },
+const NUTRIENT_NAMES: Record<string, string> = {
+  iron: 'Iron', b12: 'Vitamin B12', vitD: 'Vitamin D', vitA: 'Vitamin A',
+  folate: 'Folate', zinc: 'Zinc', protein: 'Protein', hydration: 'Hydration',
+  vitC: 'Vitamin C', omega3: 'Omega-3',
 };
 
 export function ProfileScreen() {
@@ -60,18 +40,14 @@ export function ProfileScreen() {
   const latestScan = scans[0];
   const latestScore = latestScan?.overallBalanceScore ?? null;
 
-  // Get top strengths and focus areas from latest scan
   const getNutrientInsights = () => {
     if (!latestScan?.nutrientScores) return { strengths: [], focus: [] };
     const entries = Object.entries(latestScan.nutrientScores)
-      .filter(([k]) => NUTRIENT_LABELS[k])
+      .filter(([k]) => NUTRIENT_NAMES[k])
       .map(([k, v]) => ({ key: k, score: typeof v === 'object' ? (v as any).score ?? v : v as number }))
       .filter(e => typeof e.score === 'number')
       .sort((a, b) => b.score - a.score);
-    return {
-      strengths: entries.slice(0, 3),
-      focus: entries.slice(-3).reverse(),
-    };
+    return { strengths: entries.slice(0, 3), focus: entries.slice(-3).reverse() };
   };
 
   const { strengths, focus } = getNutrientInsights();
@@ -89,7 +65,7 @@ export function ProfileScreen() {
   const handleDelete = () => {
     Alert.alert('Delete Account', 'This permanently deletes all your data. This action cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete Forever', style: 'destructive', onPress: async () => {
+      { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteAccount(); } catch {}
         await clearSession();
         nav.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Auth' }] }));
@@ -101,49 +77,46 @@ export function ProfileScreen() {
     ? Math.floor((Date.now() - new Date(latestScan.createdAt).getTime()) / 86400000)
     : null;
 
+  const lastScanText = daysSinceLastScan === 0 ? 'Today' : daysSinceLastScan === 1 ? 'Yesterday' : `${daysSinceLastScan}d ago`;
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* ── Hero Section ── */}
-        <View style={s.hero}>
-          <View style={s.avatarRing}>
-            <View style={s.avatar}>
-              <Text style={s.avatarLetter}>{profile?.name?.[0]?.toUpperCase() || '?'}</Text>
-            </View>
+        {/* ── Header ── */}
+        <Text style={s.pageTitle}>Profile</Text>
+
+        {/* ── Avatar + Name ── */}
+        <View style={s.heroSection}>
+          <View style={s.avatar}>
+            <Text style={s.avatarLetter}>{profile?.name?.[0]?.toUpperCase() || '?'}</Text>
           </View>
           <Text style={s.heroName}>{profile?.name || 'User'}</Text>
-          <View style={s.verifiedRow}>
-            <Text style={s.verifiedBadge}>✓ Verified</Text>
+          <View style={s.verifiedPill}>
+            <View style={s.verifiedDot} />
+            <Text style={s.verifiedText}>Verified</Text>
           </View>
         </View>
 
-        {/* ── Health Overview Card ── */}
+        {/* ── Health Overview ── */}
         {latestScore !== null && (
-          <View style={s.healthCard}>
-            <Text style={s.cardTitle}>Health Overview</Text>
+          <View style={s.card}>
+            <Text style={s.cardLabel}>HEALTH OVERVIEW</Text>
             <View style={s.healthRow}>
-              {/* Score Circle */}
-              <View style={s.scoreSection}>
+              <View style={s.scoreBlock}>
                 <View style={[s.scoreRing, { borderColor: scoreColor(latestScore) }]}>
-                  <Text style={[s.scoreNum, { color: scoreColor(latestScore) }]}>{latestScore}</Text>
+                  <Text style={[s.scoreValue, { color: scoreColor(latestScore) }]}>{latestScore}</Text>
                 </View>
-                <View style={[s.statusPill, { backgroundColor: statusLabel(latestScore).bg }]}>
-                  <Text style={[s.statusText, { color: statusLabel(latestScore).color }]}>
-                    {statusLabel(latestScore).text}
-                  </Text>
-                </View>
+                <Text style={[s.statusText, { color: scoreColor(latestScore) }]}>{statusLabel(latestScore)}</Text>
               </View>
-
-              {/* Stats Grid */}
-              <View style={s.statsGrid}>
-                <View style={s.statItem}>
-                  <Text style={s.statNum}>{scans.length}</Text>
-                  <Text style={s.statLabel}>Total Scans</Text>
+              <View style={s.healthStats}>
+                <View style={s.healthStatRow}>
+                  <Text style={s.healthStatNum}>{scans.length}</Text>
+                  <Text style={s.healthStatLabel}>Total Scans</Text>
                 </View>
-                <View style={s.statItem}>
-                  <Text style={s.statNum}>{daysSinceLastScan === 0 ? 'Today' : daysSinceLastScan === 1 ? '1d ago' : `${daysSinceLastScan}d ago`}</Text>
-                  <Text style={s.statLabel}>Last Scan</Text>
+                <View style={[s.healthStatRow, { marginTop: 14 }]}>
+                  <Text style={s.healthStatNum}>{lastScanText}</Text>
+                  <Text style={s.healthStatLabel}>Last Scan</Text>
                 </View>
               </View>
             </View>
@@ -152,62 +125,59 @@ export function ProfileScreen() {
 
         {/* ── Nutrition Insights ── */}
         {strengths.length > 0 && (
-          <View style={s.insightsCard}>
-            <Text style={s.cardTitle}>Nutrition Insights</Text>
+          <View style={s.card}>
+            <Text style={s.cardLabel}>NUTRITION INSIGHTS</Text>
 
-            <Text style={s.insightSectionTitle}>💪 Strengths</Text>
-            <View style={s.badgeRow}>
-              {strengths.map(n => (
-                <View key={n.key} style={[s.badge, { backgroundColor: '#F0FDF4' }]}>
-                  <Text style={s.badgeEmoji}>{NUTRIENT_LABELS[n.key]?.emoji}</Text>
-                  <Text style={[s.badgeName, { color: '#15803D' }]}>{NUTRIENT_LABELS[n.key]?.name}</Text>
-                  <Text style={[s.badgeScore, { color: '#22C55E' }]}>{n.score}</Text>
+            <Text style={s.insightHeading}>Strengths</Text>
+            {strengths.map(n => (
+              <View key={n.key} style={s.nutrientRow}>
+                <Text style={s.nutrientName}>{NUTRIENT_NAMES[n.key]}</Text>
+                <View style={s.nutrientBarBg}>
+                  <View style={[s.nutrientBarFill, { width: `${n.score}%`, backgroundColor: COLORS.brand }]} />
                 </View>
-              ))}
-            </View>
+                <Text style={[s.nutrientScore, { color: COLORS.brand }]}>{n.score}</Text>
+              </View>
+            ))}
 
-            <Text style={[s.insightSectionTitle, { marginTop: 16 }]}>🎯 Focus Areas</Text>
-            <View style={s.badgeRow}>
-              {focus.map(n => {
-                const c = n.score < 50 ? { bg: '#FEF2F2', text: '#B91C1C', score: '#EF4444' } : { bg: '#FFF7ED', text: '#9A3412', score: '#F97316' };
-                return (
-                  <View key={n.key} style={[s.badge, { backgroundColor: c.bg }]}>
-                    <Text style={s.badgeEmoji}>{NUTRIENT_LABELS[n.key]?.emoji}</Text>
-                    <Text style={[s.badgeName, { color: c.text }]}>{NUTRIENT_LABELS[n.key]?.name}</Text>
-                    <Text style={[s.badgeScore, { color: c.score }]}>{n.score}</Text>
+            <Text style={[s.insightHeading, { marginTop: 20 }]}>Focus Areas</Text>
+            {focus.map(n => {
+              const col = n.score < 50 ? '#EF4444' : '#F97316';
+              return (
+                <View key={n.key} style={s.nutrientRow}>
+                  <Text style={s.nutrientName}>{NUTRIENT_NAMES[n.key]}</Text>
+                  <View style={s.nutrientBarBg}>
+                    <View style={[s.nutrientBarFill, { width: `${n.score}%`, backgroundColor: col }]} />
                   </View>
-                );
-              })}
-            </View>
+                  <Text style={[s.nutrientScore, { color: col }]}>{n.score}</Text>
+                </View>
+              );
+            })}
           </View>
         )}
 
         {/* ── Personal Info ── */}
-        <View style={s.infoCard}>
-          <Text style={s.cardTitle}>Personal Information</Text>
-          <InfoRow icon="📱" label="Phone" value={profile?.phone || '--'} />
-          <InfoRow icon="🎂" label="Date of Birth" value={formatDob(profile?.dob || '')} showBorder />
-          <InfoRow icon={profile?.sex?.toLowerCase() === 'female' ? '♀️' : '♂️'} label="Sex" value={profile?.sex ? profile.sex.charAt(0).toUpperCase() + profile.sex.slice(1) : '--'} showBorder />
+        <View style={s.card}>
+          <Text style={s.cardLabel}>PERSONAL INFORMATION</Text>
+          <InfoRow label="Phone" value={profile?.phone || '--'} />
+          <InfoRow label="Date of Birth" value={formatDob(profile?.dob || '')} border />
+          <InfoRow label="Sex" value={profile?.sex ? profile.sex.charAt(0).toUpperCase() + profile.sex.slice(1) : '--'} border />
         </View>
 
         {/* ── Actions ── */}
-        <View style={s.actionsCard}>
+        <View style={s.card}>
           <TouchableOpacity style={s.actionRow} onPress={handleLogout} activeOpacity={0.6}>
-            <Text style={s.actionIcon}>🚪</Text>
             <Text style={s.actionText}>Sign Out</Text>
-            <Text style={s.actionChevron}>›</Text>
+            <Text style={s.chevron}>›</Text>
           </TouchableOpacity>
-          <View style={s.actionDivider} />
+          <View style={s.divider} />
           <TouchableOpacity style={s.actionRow} onPress={() => nav.navigate('PrivacyPolicy' as any)} activeOpacity={0.6}>
-            <Text style={s.actionIcon}>🔒</Text>
             <Text style={[s.actionText, { color: COLORS.textSecondary }]}>Privacy Policy</Text>
-            <Text style={s.actionChevron}>›</Text>
+            <Text style={s.chevron}>›</Text>
           </TouchableOpacity>
-          <View style={s.actionDivider} />
+          <View style={s.divider} />
           <TouchableOpacity style={s.actionRow} onPress={handleDelete} activeOpacity={0.6}>
-            <Text style={s.actionIcon}>⚠️</Text>
-            <Text style={[s.actionText, { color: '#EF4444' }]}>Delete Account</Text>
-            <Text style={[s.actionChevron, { color: '#EF4444' }]}>›</Text>
+            <Text style={[s.actionText, { color: COLORS.error }]}>Delete Account</Text>
+            <Text style={[s.chevron, { color: COLORS.error }]}>›</Text>
           </TouchableOpacity>
         </View>
 
@@ -223,110 +193,79 @@ export function ProfileScreen() {
   );
 }
 
-function InfoRow({ icon, label, value, showBorder }: { icon: string; label: string; value: string; showBorder?: boolean }) {
+function InfoRow({ label, value, border }: { label: string; value: string; border?: boolean }) {
   return (
-    <View style={[s.infoRow, showBorder && s.infoRowBorder]}>
-      <Text style={s.infoIcon}>{icon}</Text>
-      <View style={s.infoContent}>
-        <Text style={s.infoLabel}>{label}</Text>
-        <Text style={s.infoValue}>{value}</Text>
-      </View>
+    <View style={[s.infoRow, border && s.infoRowBorder]}>
+      <Text style={s.infoLabel}>{label}</Text>
+      <Text style={s.infoValue}>{value}</Text>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8FAFB' },
-  scroll: { paddingBottom: 40 },
+  safe: { flex: 1, backgroundColor: COLORS.white },
+  scroll: { paddingHorizontal: SPACING.xxl, paddingBottom: 40 },
 
-  // ── Hero ──
-  hero: { alignItems: 'center', paddingTop: 20, paddingBottom: 28, backgroundColor: '#FFFFFF' },
-  avatarRing: {
-    width: 88, height: 88, borderRadius: 44,
-    borderWidth: 3, borderColor: '#10B981',
+  pageTitle: { fontSize: 32, fontWeight: '700', color: COLORS.text, letterSpacing: -0.8, marginTop: 8, marginBottom: 28 },
+
+  // Hero
+  heroSection: { alignItems: 'center', marginBottom: 28 },
+  avatar: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: COLORS.text,
     justifyContent: 'center', alignItems: 'center', marginBottom: 14,
   },
-  avatar: {
-    width: 78, height: 78, borderRadius: 39,
-    backgroundColor: '#1A1A1A',
-    justifyContent: 'center', alignItems: 'center',
+  avatarLetter: { fontSize: 32, fontWeight: '700', color: COLORS.white },
+  heroName: { fontSize: 22, fontWeight: '700', color: COLORS.text, letterSpacing: -0.4 },
+  verifiedPill: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 8, paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: COLORS.brandBg, borderRadius: 12,
   },
-  avatarLetter: { fontSize: 32, fontWeight: '700', color: '#FFFFFF' },
-  heroName: { fontSize: 24, fontWeight: '700', color: '#1A1A1A', letterSpacing: -0.5 },
-  verifiedRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  verifiedBadge: {
-    fontSize: 12, fontWeight: '600', color: '#10B981',
-    backgroundColor: '#F0FDF4', paddingHorizontal: 10, paddingVertical: 3,
-    borderRadius: 12, overflow: 'hidden',
-  },
+  verifiedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.brand, marginRight: 6 },
+  verifiedText: { fontSize: 12, fontWeight: '600', color: COLORS.brand },
 
-  // ── Cards shared ──
-  cardTitle: { fontSize: 13, fontWeight: '700', color: '#999', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 16 },
-
-  // ── Health Overview ──
-  healthCard: {
-    marginHorizontal: 20, marginTop: 20, padding: 20,
-    backgroundColor: '#FFFFFF', borderRadius: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+  // Cards
+  card: {
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md,
+    padding: 20, marginBottom: 12,
   },
+  cardLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textQuaternary, letterSpacing: 1.2, marginBottom: 16 },
+
+  // Health Overview
   healthRow: { flexDirection: 'row', alignItems: 'center' },
-  scoreSection: { alignItems: 'center', marginRight: 24 },
-  scoreRing: {
-    width: 72, height: 72, borderRadius: 36, borderWidth: 4,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  scoreNum: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
-  statusPill: { marginTop: 8, paddingHorizontal: 12, paddingVertical: 3, borderRadius: 10 },
-  statusText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
-  statsGrid: { flex: 1 },
-  statItem: { marginBottom: 12 },
-  statNum: { fontSize: 18, fontWeight: '700', color: '#1A1A1A', letterSpacing: -0.3 },
-  statLabel: { fontSize: 12, color: '#999', marginTop: 2 },
+  scoreBlock: { alignItems: 'center', marginRight: 28 },
+  scoreRing: { width: 64, height: 64, borderRadius: 32, borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
+  scoreValue: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  statusText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: 6, textTransform: 'uppercase' as const },
+  healthStats: { flex: 1 },
+  healthStatRow: {},
+  healthStatNum: { fontSize: 18, fontWeight: '700', color: COLORS.text, letterSpacing: -0.3 },
+  healthStatLabel: { fontSize: 12, color: COLORS.textTertiary, marginTop: 1 },
 
-  // ── Insights ──
-  insightsCard: {
-    marginHorizontal: 20, marginTop: 12, padding: 20,
-    backgroundColor: '#FFFFFF', borderRadius: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-  },
-  insightSectionTitle: { fontSize: 14, fontWeight: '600', color: '#1A1A1A', marginBottom: 10 },
-  badgeRow: { gap: 8 },
-  badge: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14,
-    borderRadius: 12, marginBottom: 6,
-  },
-  badgeEmoji: { fontSize: 16, marginRight: 10 },
-  badgeName: { flex: 1, fontSize: 14, fontWeight: '600' },
-  badgeScore: { fontSize: 16, fontWeight: '800' },
+  // Insights
+  insightHeading: { fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 12 },
+  nutrientRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  nutrientName: { width: 90, fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
+  nutrientBarBg: { flex: 1, height: 6, borderRadius: 3, backgroundColor: COLORS.hairline, marginHorizontal: 10 },
+  nutrientBarFill: { height: 6, borderRadius: 3 },
+  nutrientScore: { width: 28, fontSize: 14, fontWeight: '700', textAlign: 'right' },
 
-  // ── Personal Info ──
-  infoCard: {
-    marginHorizontal: 20, marginTop: 12, padding: 20,
-    backgroundColor: '#FFFFFF', borderRadius: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-  },
-  infoRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
-  infoRowBorder: { borderTopWidth: 1, borderTopColor: '#F0F0F0' },
-  infoIcon: { fontSize: 20, marginRight: 14, width: 28, textAlign: 'center' },
-  infoContent: { flex: 1 },
-  infoLabel: { fontSize: 12, color: '#999', marginBottom: 2 },
-  infoValue: { fontSize: 15, fontWeight: '600', color: '#1A1A1A' },
+  // Personal Info
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
+  infoRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.hairline },
+  infoLabel: { fontSize: 14, color: COLORS.textTertiary },
+  infoValue: { fontSize: 14, fontWeight: '600', color: COLORS.text },
 
-  // ── Actions ──
-  actionsCard: {
-    marginHorizontal: 20, marginTop: 12,
-    backgroundColor: '#FFFFFF', borderRadius: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-  },
-  actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20 },
-  actionIcon: { fontSize: 18, marginRight: 14, width: 28, textAlign: 'center' },
-  actionText: { flex: 1, fontSize: 15, fontWeight: '500', color: '#1A1A1A' },
-  actionChevron: { fontSize: 20, color: '#CCC', fontWeight: '300' },
-  actionDivider: { height: 1, backgroundColor: '#F0F0F0', marginLeft: 62 },
+  // Actions
+  actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  actionText: { flex: 1, fontSize: 15, fontWeight: '500', color: COLORS.text },
+  chevron: { fontSize: 20, color: COLORS.textQuaternary, fontWeight: '300' },
+  divider: { height: 1, backgroundColor: COLORS.hairline },
 
-  // ── Footer ──
-  footer: { alignItems: 'center', marginTop: 36, paddingHorizontal: 20 },
+  // Footer
+  footer: { alignItems: 'center', marginTop: 32 },
   footerLogo: { width: 100, height: 28, marginBottom: 12, opacity: 0.4 },
-  footerText: { fontSize: 11, color: '#BBB', textAlign: 'center', lineHeight: 16 },
-  version: { fontSize: 11, color: '#CCC', marginTop: 6 },
+  footerText: { fontSize: 11, color: COLORS.textQuaternary, textAlign: 'center', lineHeight: 16 },
+  version: { fontSize: 11, color: COLORS.textQuaternary, marginTop: 6 },
 });

@@ -87,12 +87,10 @@ export function DashboardScreen() {
             activeOpacity={0.7}
             onPress={() => nav.navigate('NutritionPlan' as any)}
           >
-            <View style={s.planIconBg}>
-              <Text style={s.planIcon}>🥗</Text>
-            </View>
+            <View style={s.planDot} />
             <View style={s.planContent}>
               <Text style={s.planTitle}>{hasPlan ? 'Your Nutrition Plan' : 'Get Your Nutrition Plan'}</Text>
-              <Text style={s.planSub}>{hasPlan ? 'Tap to view your personalized daily meal plan' : 'AI-powered daily meal plan based on your scan'}</Text>
+              <Text style={s.planSub}>{hasPlan ? 'View your personalized daily meal plan' : 'AI-powered daily meal plan based on your scan'}</Text>
             </View>
             <Text style={s.planChevron}>›</Text>
           </TouchableOpacity>
@@ -148,19 +146,17 @@ const s = StyleSheet.create({
   // Nutrition Plan Card
   planCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F0FDF4', borderRadius: RADIUS.md,
-    paddingHorizontal: 16, paddingVertical: 16, marginBottom: 28,
-    borderWidth: 1, borderColor: '#D1FAE5',
+    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md,
+    paddingHorizontal: 18, paddingVertical: 18, marginBottom: 28,
   },
-  planIconBg: {
-    width: 44, height: 44, borderRadius: 12, backgroundColor: '#DCFCE7',
-    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+  planDot: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: COLORS.brand, marginRight: 16,
   },
-  planIcon: { fontSize: 22 },
   planContent: { flex: 1 },
-  planTitle: { fontSize: 15, fontWeight: '600', color: '#166534' },
-  planSub: { fontSize: 12, color: '#16A34A', marginTop: 2 },
-  planChevron: { fontSize: 22, color: '#86EFAC', fontWeight: '300' },
+  planTitle: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+  planSub: { fontSize: 12, color: COLORS.textTertiary, marginTop: 2 },
+  planChevron: { fontSize: 20, color: COLORS.textQuaternary, fontWeight: '300' },
 
   separator: { height: 1, backgroundColor: COLORS.hairline, marginBottom: 20 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
