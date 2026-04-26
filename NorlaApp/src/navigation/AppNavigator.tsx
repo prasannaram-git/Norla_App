@@ -46,7 +46,11 @@ export function AppNavigator() {
   }
 
   return (
-    <NavigationContainer theme={{ dark: isDark, colors: { primary: colors.brand, background: colors.bg, card: colors.bg, text: colors.text, border: colors.hairline, notification: colors.brand } }}>
+    <NavigationContainer theme={{
+      dark: isDark,
+      colors: { primary: colors.brand, background: colors.bg, card: colors.bg, text: colors.text, border: colors.hairline, notification: colors.brand },
+      fonts: { regular: { fontFamily: 'System', fontWeight: '400' }, medium: { fontFamily: 'System', fontWeight: '500' }, bold: { fontFamily: 'System', fontWeight: '700' }, heavy: { fontFamily: 'System', fontWeight: '900' } },
+    }}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {loggedIn ? (
           <>
