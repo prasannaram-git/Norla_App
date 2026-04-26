@@ -9,7 +9,7 @@ import { GuidedCameraScreen } from '../screens/scan/GuidedCameraScreen';
 import { PhotoReviewScreen } from '../screens/scan/PhotoUploadScreen';
 import { QuestionnaireScreen } from '../screens/scan/QuestionnaireScreen';
 import { ProcessingScreen } from '../screens/scan/ProcessingScreen';
-import { COLORS } from '../lib/theme';
+import { useTheme } from '../lib/ThemeContext';
 
 export type ScanStackParamList = {
   GuidedCamera: { step?: number; images?: Record<string, string> } | undefined;
@@ -33,6 +33,8 @@ function ScanNavigator() {
 const Tab = createBottomTabNavigator();
 
 export function MainTabs() {
+  const { colors } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -42,14 +44,14 @@ export function MainTabs() {
           height: Platform.OS === 'ios' ? 80 : 56,
           paddingBottom: Platform.OS === 'ios' ? 24 : 8,
           paddingTop: 10,
-          backgroundColor: COLORS.white,
+          backgroundColor: colors.bg,
           borderTopWidth: 1,
-          borderTopColor: COLORS.hairline,
+          borderTopColor: colors.hairline,
           elevation: 0,
           shadowOpacity: 0,
         },
-        tabBarActiveTintColor: COLORS.text,
-        tabBarInactiveTintColor: COLORS.textQuaternary,
+        tabBarActiveTintColor: colors.text,
+        tabBarInactiveTintColor: colors.textQuaternary,
         tabBarLabelStyle: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
         tabBarIconStyle: { display: 'none' },
       }}

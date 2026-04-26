@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SPACING, RADIUS } from '../../lib/theme';
+import { useTheme } from '../../lib/ThemeContext';
+import { SPACING, RADIUS, type ColorPalette } from '../../lib/theme';
 import { submitScan, syncScanToServer } from '../../lib/api';
 import { addScanToCache, getSession, getProfile } from '../../lib/storage';
 import { SERVER_URL } from '../../lib/constants';
@@ -25,6 +26,7 @@ const MESSAGES = [
 
 export function ProcessingScreen({ route }: Props) {
   const rootNav = useNavigation<any>();
+  const { colors } = useTheme();
   const { images, questionnaire } = route.params;
   const [msgIdx, setMsgIdx] = useState(0);
   const [error, setError] = useState('');
@@ -135,13 +137,14 @@ export function ProcessingScreen({ route }: Props) {
 
   const rotation = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
+  const s = makeStyles(colors);
+
   if (error) {
     return (
       <SafeAreaView style={s.safe}>
         <View style={s.center}>
           <Text style={s.errorTitle}>Analysis Failed</Text>
           <Text style={s.errorText}>{error}</Text>
-
           <TouchableOpacity style={s.retryBtn} onPress={() => { setError(''); run(); }} activeOpacity={0.8}>
             <Text style={s.retryText}>Try Again</Text>
           </TouchableOpacity>
@@ -165,17 +168,17 @@ export function ProcessingScreen({ route }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.white },
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACING.xxl },
-  spinner: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: COLORS.hairline, borderTopColor: COLORS.text, marginBottom: 32 },
-  title: { fontSize: 22, fontWeight: '700', color: COLORS.text, letterSpacing: -0.3 },
-  message: { fontSize: 15, color: COLORS.textSecondary, marginTop: 8 },
-  hint: { fontSize: 13, color: COLORS.textQuaternary, marginTop: 32 },
-  debugText: { fontSize: 11, color: COLORS.textQuaternary, marginTop: 8 },
-  errorTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
-  errorText: { fontSize: 15, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 12, lineHeight: 22, maxWidth: 300 },
-  retryBtn: { height: 48, paddingHorizontal: 32, borderRadius: RADIUS.md, backgroundColor: COLORS.text, justifyContent: 'center', alignItems: 'center', marginTop: 16 },
-  retryText: { fontSize: 15, fontWeight: '600', color: COLORS.white },
-  goBack: { fontSize: 14, color: COLORS.textSecondary },
+  spinner: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: c.hairline, borderTopColor: c.brand, marginBottom: 32 },
+  title: { fontSize: 22, fontWeight: '700', color: c.text, letterSpacing: -0.3 },
+  message: { fontSize: 15, color: c.textSecondary, marginTop: 8 },
+  hint: { fontSize: 13, color: c.textQuaternary, marginTop: 32 },
+  debugText: { fontSize: 11, color: c.textQuaternary, marginTop: 8 },
+  errorTitle: { fontSize: 20, fontWeight: '700', color: c.text, marginBottom: 8 },
+  errorText: { fontSize: 15, color: c.textSecondary, textAlign: 'center', marginBottom: 12, lineHeight: 22, maxWidth: 300 },
+  retryBtn: { height: 48, paddingHorizontal: 32, borderRadius: RADIUS.md, backgroundColor: c.invertedBg, justifyContent: 'center', alignItems: 'center', marginTop: 16 },
+  retryText: { fontSize: 15, fontWeight: '600', color: c.invertedText },
+  goBack: { fontSize: 14, color: c.textSecondary },
 });

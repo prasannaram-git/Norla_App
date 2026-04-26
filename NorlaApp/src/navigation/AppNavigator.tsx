@@ -8,7 +8,7 @@ import { ResultsScreen } from '../screens/ResultsScreen';
 import { PrivacyPolicyScreen } from '../screens/PrivacyPolicyScreen';
 import { NutritionPlanScreen } from '../screens/NutritionPlanScreen';
 import { getSession, getProfile } from '../lib/storage';
-import { COLORS } from '../lib/theme';
+import { useTheme } from '../lib/ThemeContext';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -23,6 +23,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function AppNavigator() {
   const [ready, setReady] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
+  const { colors, isDark } = useTheme();
 
   useEffect(() => {
     (async () => {
@@ -37,15 +38,15 @@ export function AppNavigator() {
 
   if (!ready) {
     return (
-      <View style={s.splash}>
+      <View style={[s.splash, { backgroundColor: colors.bg }]}>
         <Image source={require('../../assets/norla-icon-nobg.png')} style={s.logo} resizeMode="contain" />
-        <ActivityIndicator size="small" color={COLORS.textQuaternary} style={{ marginTop: 24 }} />
+        <ActivityIndicator size="small" color={colors.textQuaternary} style={{ marginTop: 24 }} />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={{ dark: isDark, colors: { primary: colors.brand, background: colors.bg, card: colors.bg, text: colors.text, border: colors.hairline, notification: colors.brand } }}>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {loggedIn ? (
           <>
@@ -70,6 +71,6 @@ export function AppNavigator() {
 }
 
 const s = StyleSheet.create({
-  splash: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white },
+  splash: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   logo: { width: 64, height: 64, marginBottom: 8 },
 });

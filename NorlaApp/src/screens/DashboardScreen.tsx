@@ -2,7 +2,8 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { COLORS, TYPE, SPACING, RADIUS } from '../lib/theme';
+import { useTheme } from '../lib/ThemeContext';
+import { SPACING, RADIUS, type ColorPalette } from '../lib/theme';
 import { getProfile, getScans, canScanToday, type ScanCache } from '../lib/storage';
 import { shouldShowRating } from '../lib/rating';
 import { RatingModal } from '../components/RatingModal';
@@ -10,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export function DashboardScreen() {
   const nav = useNavigation<any>();
+  const { colors } = useTheme();
   const [name, setName] = useState('');
   const [scans, setScans] = useState<ScanCache[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,6 +30,7 @@ export function DashboardScreen() {
     load();
     shouldShowRating().then(show => { if (show) setShowRating(true); });
   }, []));
+
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const greeting = useMemo(() => {
@@ -36,14 +39,14 @@ export function DashboardScreen() {
   }, []);
 
   const latest = scans[0]?.overallBalanceScore ?? null;
-  const scoreColor = (s: number) => s >= 75 ? COLORS.scoreHigh : s >= 50 ? COLORS.scoreMedium : s >= 30 ? COLORS.scoreLow : COLORS.scoreCritical;
+  const scoreColor = (s: number) => s >= 75 ? colors.scoreHigh : s >= 50 ? colors.scoreMedium : s >= 30 ? colors.scoreLow : colors.scoreCritical;
+  const s = makeStyles(colors);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.textQuaternary} />}>
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textQuaternary} />}>
 
-        {/* Greeting */}
         <Text style={s.greeting}>{greeting},</Text>
         <Text style={s.name}>{name || 'there'}</Text>
 
@@ -74,32 +77,22 @@ export function DashboardScreen() {
           }
           nav.navigate('Scan');
         }}>
-          <View>
-            <Text style={s.ctaTitle}>New Scan</Text>
-            <Text style={s.ctaSub}>AI-powered nutrition analysis</Text>
-          </View>
+          <Text style={s.ctaTitle}>New Scan</Text>
+          <Text style={s.ctaSub}>AI-powered nutrition analysis</Text>
         </TouchableOpacity>
 
-        {/* ── Nutrition Plan Card ── */}
+        {/* Plan Card */}
         {scans.length > 0 && (
-          <TouchableOpacity
-            style={s.planCard}
-            activeOpacity={0.7}
-            onPress={() => nav.navigate('NutritionPlan' as any)}
-          >
-            <View style={s.planDot} />
-            <View style={s.planContent}>
+          <TouchableOpacity style={s.planCard} activeOpacity={0.7} onPress={() => nav.navigate('NutritionPlan' as any)}>
+            <View style={{ flex: 1 }}>
               <Text style={s.planTitle}>{hasPlan ? 'Your Nutrition Plan' : 'Get Your Nutrition Plan'}</Text>
               <Text style={s.planSub}>{hasPlan ? 'View your personalized daily meal plan' : 'AI-powered daily meal plan based on your scan'}</Text>
             </View>
-            <Text style={s.planChevron}>›</Text>
+            <Text style={s.planArrow}>→</Text>
           </TouchableOpacity>
         )}
 
-        {/* Separator */}
         <View style={s.separator} />
-
-        {/* Recent */}
         <Text style={s.sectionTitle}>Recent</Text>
 
         {scans.length === 0 ? (
@@ -108,7 +101,7 @@ export function DashboardScreen() {
             <Text style={s.emptyText}>Complete your first nutrition scan to see results here.</Text>
           </View>
         ) : (
-          scans.slice(0, 5).map((scan) => (
+          scans.slice(0, 5).map(scan => (
             <TouchableOpacity key={scan.id} style={s.scanRow} activeOpacity={0.6} onPress={() => nav.navigate('Results', { scanData: scan })}>
               <View style={[s.scanScoreCircle, { borderColor: scoreColor(scan.overallBalanceScore) }]}>
                 <Text style={[s.scanScoreNum, { color: scoreColor(scan.overallBalanceScore) }]}>{scan.overallBalanceScore}</Text>
@@ -126,49 +119,36 @@ export function DashboardScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.white },
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
   scroll: { paddingHorizontal: SPACING.xxl, paddingBottom: 40 },
-
-  greeting: { fontSize: 15, color: COLORS.textTertiary },
-  name: { fontSize: 32, fontWeight: '700', color: COLORS.text, letterSpacing: -0.8, marginBottom: 32 },
-
-  statsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 20, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.hairline, marginBottom: 28 },
+  greeting: { fontSize: 15, color: c.textTertiary },
+  name: { fontSize: 32, fontWeight: '700', color: c.text, letterSpacing: -0.8, marginBottom: 32 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 20, borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline, marginBottom: 28 },
   statBlock: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 24, fontWeight: '700', color: COLORS.text, letterSpacing: -0.3 },
-  statLabel: { fontSize: 12, color: COLORS.textTertiary, marginTop: 4 },
-  statDivider: { width: 1, height: 32, backgroundColor: COLORS.hairline },
-
-  cta: { backgroundColor: COLORS.text, borderRadius: RADIUS.md, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 14 },
-  ctaTitle: { fontSize: 17, fontWeight: '600', color: COLORS.white },
-  ctaSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
-
-  // Nutrition Plan Card
+  statValue: { fontSize: 24, fontWeight: '700', color: c.text, letterSpacing: -0.3 },
+  statLabel: { fontSize: 12, color: c.textTertiary, marginTop: 4 },
+  statDivider: { width: 1, height: 32, backgroundColor: c.hairline },
+  cta: { backgroundColor: c.invertedBg, borderRadius: RADIUS.md, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 14 },
+  ctaTitle: { fontSize: 17, fontWeight: '600', color: c.invertedText },
+  ctaSub: { fontSize: 13, color: c.textTertiary, marginTop: 2 },
   planCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.bgSecondary, borderRadius: RADIUS.md,
+    backgroundColor: c.cardBg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: c.border,
     paddingHorizontal: 18, paddingVertical: 18, marginBottom: 28,
   },
-  planDot: {
-    width: 10, height: 10, borderRadius: 5,
-    backgroundColor: COLORS.brand, marginRight: 16,
-  },
-  planContent: { flex: 1 },
-  planTitle: { fontSize: 15, fontWeight: '600', color: COLORS.text },
-  planSub: { fontSize: 12, color: COLORS.textTertiary, marginTop: 2 },
-  planChevron: { fontSize: 20, color: COLORS.textQuaternary, fontWeight: '300' },
-
-  separator: { height: 1, backgroundColor: COLORS.hairline, marginBottom: 20 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
-
+  planTitle: { fontSize: 15, fontWeight: '600', color: c.text },
+  planSub: { fontSize: 12, color: c.textTertiary, marginTop: 3 },
+  planArrow: { fontSize: 18, color: c.brand, fontWeight: '500', marginLeft: 12 },
+  separator: { height: 1, backgroundColor: c.hairline, marginBottom: 20 },
+  sectionTitle: { fontSize: 13, fontWeight: '600', color: c.textTertiary, textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 16 },
   empty: { paddingVertical: 40, alignItems: 'center' },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: COLORS.textSecondary },
-  emptyText: { fontSize: 14, color: COLORS.textTertiary, marginTop: 4, textAlign: 'center', lineHeight: 20 },
-
-  scanRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.hairline },
-  scanScoreCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: c.textSecondary },
+  emptyText: { fontSize: 14, color: c.textTertiary, marginTop: 4, textAlign: 'center', lineHeight: 20 },
+  scanRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.hairline },
+  scanScoreCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
   scanScoreNum: { fontSize: 16, fontWeight: '700' },
   scanInfo: { flex: 1, marginLeft: 14 },
-  scanTitle: { fontSize: 15, fontWeight: '500', color: COLORS.text },
-  scanDate: { fontSize: 13, color: COLORS.textTertiary, marginTop: 2 },
+  scanTitle: { fontSize: 15, fontWeight: '500', color: c.text },
+  scanDate: { fontSize: 13, color: c.textTertiary, marginTop: 2 },
 });

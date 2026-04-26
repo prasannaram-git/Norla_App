@@ -2,10 +2,13 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, SPACING, RADIUS } from '../lib/theme';
+import { useTheme } from '../lib/ThemeContext';
+import { SPACING, type ColorPalette } from '../lib/theme';
 
 export function PrivacyPolicyScreen() {
   const nav = useNavigation();
+  const { colors } = useTheme();
+  const s = makeStyles(colors);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -93,19 +96,13 @@ export function PrivacyPolicyScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.white },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: SPACING.xxl, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: COLORS.hairline,
-  },
-  backBtn: { fontSize: 16, fontWeight: '500', color: COLORS.text },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: COLORS.text },
-
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.xxl, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.hairline },
+  backBtn: { fontSize: 16, fontWeight: '500', color: c.text },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: c.text },
   content: { paddingHorizontal: SPACING.xxl, paddingTop: 20 },
-  lastUpdated: { fontSize: 13, color: COLORS.textTertiary, marginBottom: 24 },
-
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: COLORS.text, marginTop: 24, marginBottom: 8 },
-  body: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 22 },
+  lastUpdated: { fontSize: 13, color: c.textTertiary, marginBottom: 24 },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: c.text, marginTop: 24, marginBottom: 8 },
+  body: { fontSize: 14, color: c.textSecondary, lineHeight: 22 },
 });
