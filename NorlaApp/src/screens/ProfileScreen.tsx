@@ -97,22 +97,21 @@ export function ProfileScreen() {
         {latestScore !== null && (
           <View style={s.card}>
             <Text style={s.cardLabel}>HEALTH OVERVIEW</Text>
-            <View style={s.healthRow}>
-              <View style={s.scoreBlock}>
-                <View style={[s.scoreRing, { borderColor: scoreColor(latestScore) }]}>
-                  <Text style={[s.scoreValue, { color: scoreColor(latestScore) }]}>{latestScore}</Text>
-                </View>
-                <Text style={[s.statusText, { color: scoreColor(latestScore) }]}>{statusLabel(latestScore)}</Text>
+            <View style={s.healthCenter}>
+              <View style={[s.scoreRing, { borderColor: scoreColor(latestScore) }]}>
+                <Text style={[s.scoreValue, { color: scoreColor(latestScore) }]}>{latestScore}</Text>
               </View>
-              <View style={s.healthStats}>
-                <View style={s.healthStatRow}>
-                  <Text style={s.healthStatNum}>{scans.length}</Text>
-                  <Text style={s.healthStatLabel}>Total Scans</Text>
-                </View>
-                <View style={[s.healthStatRow, { marginTop: 14 }]}>
-                  <Text style={s.healthStatNum}>{lastScanText}</Text>
-                  <Text style={s.healthStatLabel}>Last Scan</Text>
-                </View>
+              <Text style={[s.statusText, { color: scoreColor(latestScore) }]}>{statusLabel(latestScore)}</Text>
+            </View>
+            <View style={s.statsGrid}>
+              <View style={s.statBox}>
+                <Text style={s.statNum}>{scans.length}</Text>
+                <Text style={s.statLabel}>Total Scans</Text>
+              </View>
+              <View style={s.statDivider} />
+              <View style={s.statBox}>
+                <Text style={s.statNum}>{lastScanText}</Text>
+                <Text style={s.statLabel}>Last Scan</Text>
               </View>
             </View>
           </View>
@@ -223,15 +222,15 @@ const makeStyles = (c: ColorPalette) => StyleSheet.create({
   heroPhone: { fontSize: 14, color: c.textTertiary, marginTop: 4 },
   card: { backgroundColor: c.cardBg, borderRadius: RADIUS.md, padding: 20, marginBottom: 12 },
   cardLabel: { fontSize: 11, fontWeight: '700', color: c.textQuaternary, letterSpacing: 1.2, marginBottom: 16 },
-  healthRow: { flexDirection: 'row', alignItems: 'center' },
-  scoreBlock: { alignItems: 'center', marginRight: 28 },
-  scoreRing: { width: 64, height: 64, borderRadius: 32, borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
-  scoreValue: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  statusText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: 6, textTransform: 'uppercase' as const },
-  healthStats: { flex: 1 },
-  healthStatRow: {},
-  healthStatNum: { fontSize: 18, fontWeight: '700', color: c.text, letterSpacing: -0.3 },
-  healthStatLabel: { fontSize: 12, color: c.textTertiary, marginTop: 1 },
+  healthCenter: { alignItems: 'center', marginBottom: 20 },
+  scoreRing: { width: 72, height: 72, borderRadius: 36, borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
+  scoreValue: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  statusText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: 8, textTransform: 'uppercase' as const },
+  statsGrid: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: c.hairline, paddingTop: 16 },
+  statBox: { flex: 1, alignItems: 'center' },
+  statNum: { fontSize: 18, fontWeight: '700', color: c.text, letterSpacing: -0.3 },
+  statLabel: { fontSize: 12, color: c.textTertiary, marginTop: 3 },
+  statDivider: { width: 1, height: 32, backgroundColor: c.hairline },
   insightHeading: { fontSize: 14, fontWeight: '600', color: c.text, marginBottom: 12 },
   nutrientRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   nutrientName: { width: 90, fontSize: 13, fontWeight: '500', color: c.textSecondary },
