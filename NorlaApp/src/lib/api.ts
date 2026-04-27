@@ -64,6 +64,7 @@ export async function sendOTP(phone: string) {
   return request<{ success: boolean; method: string; dev_code?: string }>('/api/otp/send', {
     method: 'POST',
     body: { phone },
+    timeout: 90000, // Render free tier cold-starts can take 50-60s
   });
 }
 
