@@ -3,9 +3,12 @@ import Constants from 'expo-constants';
 
 function getServerUrl(): string {
   if (__DEV__) {
-    const debuggerHost = Constants.expoConfig?.hostUri?.split(':')[0];
-    if (debuggerHost) return `http://${debuggerHost}:3000`;
-    return 'http://10.81.190.191:3000';
+    // Use production server even in dev — WhatsApp OTP only works on production
+    // To use local server for testing, uncomment the lines below:
+    // const debuggerHost = Constants.expoConfig?.hostUri?.split(':')[0];
+    // if (debuggerHost) return `http://${debuggerHost}:3000`;
+    // return 'http://10.81.190.191:3000';
+    return 'https://norla-server.onrender.com';
   }
   return 'https://norla-server.onrender.com';
 }
