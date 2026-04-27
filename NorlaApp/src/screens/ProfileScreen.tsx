@@ -203,7 +203,7 @@ export function ProfileScreen() {
 
         {/* ── Footer ── */}
         <View style={s.footer}>
-          <Image source={require('../../assets/norla-full-logo.png')} style={s.footerLogo} resizeMode="contain" />
+          <Image source={isDark ? require('../../assets/norla-full-logo-white.png') : require('../../assets/norla-full-logo.png')} style={s.footerLogo} resizeMode="contain" />
           <Text style={s.footerText}>Norla provides AI-generated predictions for{'\n'}wellness awareness only. Not a medical device.</Text>
           <Text style={s.version}>Version {APP_VERSION}</Text>
         </View>

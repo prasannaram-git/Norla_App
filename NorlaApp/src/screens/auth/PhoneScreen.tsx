@@ -13,7 +13,7 @@ import type { AuthStackParamList } from '../../navigation/AuthStack';
 type Props = NativeStackScreenProps<AuthStackParamList, 'Phone'>;
 
 export function PhoneScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -45,12 +45,13 @@ export function PhoneScreen({ navigation }: Props) {
   const minDigits = Math.min(country.maxLen, 6);
   const isValid = phone.replace(/\D/g, '').length >= minDigits;
   const s = makeStyles(colors);
+  const logoSource = isDark ? require('../../../assets/norla-full-logo-white.png') : require('../../../assets/norla-full-logo.png');
 
   return (
     <SafeAreaView style={s.safe}>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={s.content}>
-          <Image source={require('../../../assets/norla-full-logo.png')} style={s.logo} resizeMode="contain" />
+          <Image source={logoSource} style={s.logo} resizeMode="contain" />
           <Text style={s.heading}>Enter your number</Text>
           <Text style={s.sub}>We'll send a verification code to your WhatsApp.</Text>
           <View style={s.row}>
