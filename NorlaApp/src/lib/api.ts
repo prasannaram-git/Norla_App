@@ -226,23 +226,17 @@ export async function generateNutritionPlan(payload: {
   nutrientScores: Record<string, any>;
   userAge?: number;
   userSex?: string;
-  foodPattern?: string;
+  userPhone?: string;
 }) {
   return request<{
     success: boolean;
     plan: {
       planDate: string;
-      summary: string;
-      targetNutrients: string[];
-      meals: {
-        breakfast: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
-        midMorning: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
-        lunch: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
-        evening: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
-        dinner: { time: string; items: { food: string; quantity: string; nutrient: string; benefit: string }[] };
-      };
-      hydration: string;
-      tips: string[];
+      currency: string;
+      meals: Record<string, {
+        time: string;
+        items: { food: string; kcal: number; price: number }[];
+      }>;
     };
     generatedAt: string;
     processingTime: number;

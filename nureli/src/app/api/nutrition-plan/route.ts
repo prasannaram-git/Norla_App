@@ -5,81 +5,113 @@ import { getNextAIKey } from '@/lib/ai-keys';
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
-function buildPlanPrompt(nutrientScores: Record<string, number>, userAge?: number, userSex?: string): string {
+const CURRENCY_MAP: Record<string, { symbol: string; code: string; name: string }> = {
+  '+91': { symbol: '₹', code: 'INR', name: 'Indian Rupees' },
+  '+1': { symbol: '$', code: 'USD', name: 'US Dollars' },
+  '+44': { symbol: '£', code: 'GBP', name: 'British Pounds' },
+  '+61': { symbol: 'A$', code: 'AUD', name: 'Australian Dollars' },
+  '+65': { symbol: 'S$', code: 'SGD', name: 'Singapore Dollars' },
+  '+971': { symbol: 'AED', code: 'AED', name: 'UAE Dirhams' },
+  '+966': { symbol: 'SAR', code: 'SAR', name: 'Saudi Riyals' },
+  '+49': { symbol: '€', code: 'EUR', name: 'Euros' },
+  '+33': { symbol: '€', code: 'EUR', name: 'Euros' },
+  '+34': { symbol: '€', code: 'EUR', name: 'Euros' },
+  '+39': { symbol: '€', code: 'EUR', name: 'Euros' },
+  '+31': { symbol: '€', code: 'EUR', name: 'Euros' },
+  '+81': { symbol: '¥', code: 'JPY', name: 'Japanese Yen' },
+  '+86': { symbol: '¥', code: 'CNY', name: 'Chinese Yuan' },
+  '+82': { symbol: '₩', code: 'KRW', name: 'Korean Won' },
+  '+55': { symbol: 'R$', code: 'BRL', name: 'Brazilian Real' },
+  '+7': { symbol: '₽', code: 'RUB', name: 'Russian Rubles' },
+  '+92': { symbol: 'Rs', code: 'PKR', name: 'Pakistani Rupees' },
+  '+880': { symbol: '৳', code: 'BDT', name: 'Bangladeshi Taka' },
+  '+977': { symbol: 'Rs', code: 'NPR', name: 'Nepalese Rupees' },
+  '+94': { symbol: 'Rs', code: 'LKR', name: 'Sri Lankan Rupees' },
+  '+60': { symbol: 'RM', code: 'MYR', name: 'Malaysian Ringgit' },
+  '+63': { symbol: '₱', code: 'PHP', name: 'Philippine Peso' },
+  '+62': { symbol: 'Rp', code: 'IDR', name: 'Indonesian Rupiah' },
+  '+66': { symbol: '฿', code: 'THB', name: 'Thai Baht' },
+  '+234': { symbol: '₦', code: 'NGN', name: 'Nigerian Naira' },
+  '+27': { symbol: 'R', code: 'ZAR', name: 'South African Rand' },
+  '+254': { symbol: 'KSh', code: 'KES', name: 'Kenyan Shillings' },
+};
+
+function getCurrency(phone?: string): { symbol: string; code: string; name: string } {
+  if (!phone) return CURRENCY_MAP['+91'];
+  // Try longest dial code first (e.g., +971 before +97)
+  const digits = phone.replace(/[^+\d]/g, '');
+  for (const len of [4, 3, 2]) {
+    const prefix = digits.substring(0, len + 1); // includes +
+    if (CURRENCY_MAP[prefix]) return CURRENCY_MAP[prefix];
+  }
+  return CURRENCY_MAP['+91']; // default INR
+}
+
+function buildPrompt(
+  nutrientScores: Record<string, number>,
+  userAge?: number,
+  userSex?: string,
+  currency?: { symbol: string; code: string; name: string }
+): string {
   const ageStr = userAge ? `${userAge} years old` : 'adult';
   const sexStr = userSex || 'unknown sex';
+  const cur = currency || CURRENCY_MAP['+91'];
 
   const deficient = Object.entries(nutrientScores)
     .filter(([, score]) => score < 65)
     .sort(([, a], [, b]) => a - b)
     .map(([name, score]) => `${name}: ${score}/100`);
 
-  const adequate = Object.entries(nutrientScores)
-    .filter(([, score]) => score >= 75)
-    .map(([name]) => name);
-
-  return `You are Norla AI, a senior clinical nutritionist. Create a CLEAN, CONCISE daily meal plan.
+  return `You are Norla AI, a clinical nutritionist. Create a daily meal plan.
 
 PATIENT: ${ageStr}, ${sexStr}
-DEFICIENCIES: ${deficient.length > 0 ? deficient.join(', ') : 'None'}
-ADEQUATE: ${adequate.length > 0 ? adequate.join(', ') : 'N/A'}
+DEFICIENCIES: ${deficient.length > 0 ? deficient.join(', ') : 'None identified'}
+CURRENCY: ${cur.symbol} (${cur.name})
 
-Return ONLY this JSON (no markdown, no extra text):
+Return ONLY valid JSON (no markdown, no text outside JSON):
 {
   "planDate": "${new Date().toISOString().slice(0, 10)}",
-  "summary": "<ONE short sentence about what this plan focuses on>",
-  "dailyCalories": <number>,
-  "focusNutrients": ["<Human readable name like Omega-3, Vitamin D, Iron, Protein>"],
+  "currency": "${cur.symbol}",
   "meals": {
     "breakfast": {
       "time": "7:00 - 8:30 AM",
-      "calories": <number>,
       "items": [
-        { "food": "<food name>", "qty": "<e.g. 200g, 2 pieces, 1 cup>" }
+        { "food": "<food name>", "kcal": <number>, "price": <number in ${cur.code}> }
       ]
     },
     "midMorning": {
       "time": "10:30 - 11:00 AM",
-      "calories": <number>,
       "items": [
-        { "food": "<name>", "qty": "<amount>" }
+        { "food": "<name>", "kcal": <number>, "price": <number> }
       ]
     },
     "lunch": {
       "time": "12:30 - 1:30 PM",
-      "calories": <number>,
       "items": [
-        { "food": "<name>", "qty": "<amount>" }
+        { "food": "<name>", "kcal": <number>, "price": <number> }
       ]
     },
     "evening": {
       "time": "4:00 - 5:00 PM",
-      "calories": <number>,
       "items": [
-        { "food": "<name>", "qty": "<amount>" }
+        { "food": "<name>", "kcal": <number>, "price": <number> }
       ]
     },
     "dinner": {
       "time": "7:30 - 8:30 PM",
-      "calories": <number>,
       "items": [
-        { "food": "<name>", "qty": "<amount>" }
+        { "food": "<name>", "kcal": <number>, "price": <number> }
       ]
     }
-  },
-  "hydration": "<short: e.g. 3.5 litres of water daily>",
-  "tips": ["<short 1-line tip>", "<short 1-line tip>", "<short 1-line tip>"]
+  }
 }
 
 RULES:
-- Each meal: exactly 3-4 items
-- Use common Indian foods, specific quantities
-- focusNutrients must be HUMAN READABLE (e.g. "Omega-3", "Iron", "Protein", "Vitamin D", "Hydration")
-- Do NOT use camelCase or technical names
-- summary: MAX 15 words
-- hydration: MAX 10 words
-- tips: MAX 15 words each, exactly 3 tips
-- Return ONLY valid JSON`;
+- Each meal: exactly 3-4 food items
+- Use locally available foods for the patient's region
+- kcal: accurate calorie count per serving
+- price: realistic current local market/grocery price per serving in ${cur.code} (integer, no decimals)
+- Return ONLY valid JSON, nothing else`;
 }
 
 function extractJSON(text: string): any {
@@ -97,7 +129,7 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
     const body = await req.json();
-    const { nutrientScores, userAge, userSex } = body;
+    const { nutrientScores, userAge, userSex, userPhone } = body;
 
     if (!nutrientScores || typeof nutrientScores !== 'object') {
       return NextResponse.json({ error: 'nutrientScores required' }, { status: 400 });
@@ -108,6 +140,8 @@ export async function POST(req: NextRequest) {
     const token = sessionCookie || authHeader;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const currency = getCurrency(userPhone);
+
     const flatScores: Record<string, number> = {};
     for (const [key, val] of Object.entries(nutrientScores)) {
       if (typeof val === 'number') flatScores[key] = val;
@@ -116,7 +150,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const prompt = buildPlanPrompt(flatScores, userAge, userSex);
+    const prompt = buildPrompt(flatScores, userAge, userSex, currency);
     const modelsToTry = ['google/gemini-2.5-flash', 'google/gemini-2.0-flash-exp:free', 'google/gemini-2.5-flash-lite'];
     let lastError = '';
 
@@ -124,10 +158,12 @@ export async function POST(req: NextRequest) {
       const model = modelsToTry[attempt % modelsToTry.length];
       try {
         const currentKey = await getNextAIKey();
-        console.log(`[NutritionPlan] Attempt ${attempt + 1} model=${model}`);
+        console.log(`[NutritionPlan] Attempt ${attempt + 1} model=${model} currency=${currency.symbol}`);
         const responseText = await callOpenRouter(currentKey.apiKey, model, prompt, [], 80000);
         await currentKey.onSuccess();
         const plan = extractJSON(responseText);
+        // Ensure currency symbol is included
+        if (!plan.currency) plan.currency = currency.symbol;
         console.log(`[NutritionPlan] Success in ${Date.now() - startTime}ms`);
         return NextResponse.json({ success: true, plan, generatedAt: new Date().toISOString(), processingTime: Date.now() - startTime });
       } catch (err: unknown) {
