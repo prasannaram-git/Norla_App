@@ -63,23 +63,25 @@ export async function POST(req: NextRequest) {
     let method = 'unavailable';
 
     try {
-      const { sendOTPViaWhatsApp, autoRestoreSessions } = await import('@/lib/whatsapp-web');
-      // Ensure sessions are restored on first call
-      await autoRestoreSessions();
+      console.log(`[OTP] Attempting WhatsApp Web for ${formatted}...`);
+      const { sendOTPViaWhatsApp } = await import('@/lib/whatsapp-web');
       sent = await sendOTPViaWhatsApp(formatted, code);
       method = sent ? 'whatsapp_web' : 'unavailable';
-    } catch {
-      // WhatsApp Web module may not be available in some environments
+      console.log(`[OTP] WhatsApp Web result: sent=${sent}`);
+    } catch (waErr) {
+      console.error('[OTP] WhatsApp Web error:', waErr instanceof Error ? waErr.message : waErr);
     }
 
     // Fallback: WhatsApp Cloud API (Meta Business Platform)
     if (!sent) {
       try {
+        console.log('[OTP] Trying WhatsApp Cloud API fallback...');
         const { sendWhatsAppOTP } = await import('@/lib/whatsapp');
         sent = await sendWhatsAppOTP(formatted, code);
         if (sent) method = 'whatsapp_cloud';
-      } catch {
-        // Cloud API not configured
+        console.log(`[OTP] Cloud API result: sent=${sent}`);
+      } catch (cloudErr) {
+        console.error('[OTP] Cloud API error:', cloudErr instanceof Error ? cloudErr.message : cloudErr);
       }
     }
 

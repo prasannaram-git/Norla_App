@@ -323,16 +323,27 @@ export async function autoRestoreSessions(): Promise<void> {
 
 // ── Round-robin OTP sending (tries all connected slots) ───────────
 export async function sendOTPViaWhatsApp(phoneNumber: string, code: string): Promise<boolean> {
-  // Trigger auto-restore on first use (no-op if already done)
-  autoRestoreSessions().catch(() => {});
+  // Trigger auto-restore on first use (awaited so sessions can begin connecting)
+  await autoRestoreSessions();
 
   const slots = getSlots();
-  const connected = Array.from(slots.values())
-    .filter((s) => s.status === 'connected' && s.socket)
-    .sort((a, b) => a.messagesSent - b.messagesSent); // least-used first
+
+  // Wait for at least one slot to connect (Baileys handshake takes a few seconds after restore)
+  let connected = getConnectedSlots(slots);
+  if (connected.length === 0) {
+    console.log('[WhatsApp] No connected slots yet — waiting up to 20s for sessions to establish...');
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      connected = getConnectedSlots(slots);
+      if (connected.length > 0) {
+        console.log(`[WhatsApp] Slot connected after ${i + 1}s wait`);
+        break;
+      }
+    }
+  }
 
   if (connected.length === 0) {
-    console.warn('[WhatsApp] No connected slots available for OTP');
+    console.warn('[WhatsApp] No connected slots available for OTP after waiting');
     return false;
   }
 
@@ -356,3 +367,10 @@ export async function sendOTPViaWhatsApp(phoneNumber: string, code: string): Pro
   console.error('[WhatsApp] All slots failed to send OTP');
   return false;
 }
+
+function getConnectedSlots(slots: Map<string, WASlot>): WASlot[] {
+  return Array.from(slots.values())
+    .filter((s) => s.status === 'connected' && s.socket)
+    .sort((a, b) => a.messagesSent - b.messagesSent);
+}
+
