@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SPACING, RADIUS } from '../../lib/theme';
+import { useTheme } from '../../lib/ThemeContext';
+import { SPACING, RADIUS, type ColorPalette } from '../../lib/theme';
 import { IMAGE_STEPS } from '../../lib/constants';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { ScanStackParamList } from '../../navigation/MainTabs';
@@ -10,8 +11,10 @@ type Props = NativeStackScreenProps<ScanStackParamList, 'PhotoReview'>;
 
 export function PhotoReviewScreen({ navigation, route }: Props) {
   const { images } = route.params;
+  const { colors } = useTheme();
   const allCaptured = IMAGE_STEPS.every(s => !!images[s.key]);
   const capturedCount = IMAGE_STEPS.filter(s => !!images[s.key]).length;
+  const s = makeStyles(colors);
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -65,20 +68,20 @@ export function PhotoReviewScreen({ navigation, route }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.white },
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
   scroll: { paddingHorizontal: SPACING.xxl, paddingBottom: 24 },
-  heading: { fontSize: 28, fontWeight: '700', color: COLORS.text, letterSpacing: -0.6, marginTop: 12 },
-  sub: { fontSize: 14, color: COLORS.textSecondary, marginTop: 6, marginBottom: 24, lineHeight: 20 },
+  heading: { fontSize: 28, fontWeight: '700', color: c.text, letterSpacing: -0.6, marginTop: 12 },
+  sub: { fontSize: 14, color: c.textSecondary, marginTop: 6, marginBottom: 24, lineHeight: 20 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  photoCard: { width: '47%', aspectRatio: 0.85, borderRadius: RADIUS.md, overflow: 'hidden', backgroundColor: COLORS.bgSecondary },
+  photoCard: { width: '47%', aspectRatio: 0.85, borderRadius: RADIUS.md, overflow: 'hidden', backgroundColor: c.bgTertiary },
   photoImg: { width: '100%', height: '100%' },
   photoEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { fontSize: 12, color: COLORS.textTertiary },
+  emptyText: { fontSize: 12, color: c.textTertiary },
   photoLabel: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.55)' },
   labelText: { fontSize: 13, fontWeight: '600', color: '#fff' },
-  checkDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success },
+  checkDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.success },
 
   bottomBar: {
     flexDirection: 'row',
@@ -88,12 +91,12 @@ const s = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.hairline,
-    backgroundColor: COLORS.white,
+    borderTopColor: c.hairline,
+    backgroundColor: c.bg,
   },
   backBtn: { paddingVertical: 14, paddingHorizontal: 16 },
-  backText: { fontSize: 15, fontWeight: '500', color: COLORS.textSecondary },
-  btn: { flex: 1, height: 52, borderRadius: RADIUS.md, backgroundColor: COLORS.text, justifyContent: 'center', alignItems: 'center' },
+  backText: { fontSize: 15, fontWeight: '500', color: c.textSecondary },
+  btn: { flex: 1, height: 52, borderRadius: RADIUS.md, backgroundColor: c.brand, justifyContent: 'center', alignItems: 'center' },
   btnOff: { opacity: 0.15 },
-  btnText: { fontSize: 16, fontWeight: '600', color: COLORS.white },
+  btnText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
 });

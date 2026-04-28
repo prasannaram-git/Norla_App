@@ -71,10 +71,12 @@ export function QuestionnaireScreen({ navigation, route }: Props) {
             {q.type === 'pills' && (
               <View style={s.pillsRow}>
                 {q.options?.map(opt => {
-                  const active = answers[q.field] === opt;
+                  const optValue = typeof opt === 'string' ? opt : opt.value;
+                  const optLabel = typeof opt === 'string' ? opt : opt.label;
+                  const active = answers[q.field] === optValue;
                   return (
-                    <TouchableOpacity key={opt} style={[s.pill, active && s.pillActive]} onPress={() => set(q.field, opt)} activeOpacity={0.7}>
-                      <Text style={[s.pillText, active && s.pillTextActive]}>{opt}</Text>
+                    <TouchableOpacity key={optValue} style={[s.pill, active && s.pillActive]} onPress={() => set(q.field, optValue)} activeOpacity={0.7}>
+                      <Text style={[s.pillText, active && s.pillTextActive]}>{optLabel}</Text>
                     </TouchableOpacity>
                   );
                 })}

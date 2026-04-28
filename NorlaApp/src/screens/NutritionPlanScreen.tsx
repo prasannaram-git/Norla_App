@@ -46,7 +46,17 @@ export function NutritionPlanScreen() {
         AsyncStorage.getItem(CHECK_CACHE_KEY),
       ]);
       if (cachedChecks) { try { setChecked(JSON.parse(cachedChecks)); } catch {} }
-      if (cachedPlan) { try { setPlan(JSON.parse(cachedPlan)); return; } catch {} }
+      if (cachedPlan) {
+        try {
+          const parsed = JSON.parse(cachedPlan);
+          // Validate: discard old plans where all kcal are zero (buggy AI output)
+          const allMeals = Object.values(parsed.meals || {}) as any[];
+          const hasRealData = allMeals.some((m: any) => m.items?.some((i: any) => (i.kcal || 0) > 0));
+          if (hasRealData) { setPlan(parsed); return; }
+          // Old plan with zeros — clear and regenerate
+          await AsyncStorage.removeItem(PLAN_CACHE_KEY);
+        } catch {}
+      }
       const scans = await getScans();
       if (scans.length === 0) { setHasScans(false); return; }
       setHasScans(true);
@@ -197,8 +207,6 @@ export function NutritionPlanScreen() {
 
           return (
             <View key={mealKey} style={s.table}>
-              {/* Brand accent strip */}
-              <View style={s.accentStrip} />
 
               {/* Meal header */}
               <View style={s.tableHeader}>
@@ -282,8 +290,7 @@ const makeStyles = (c: ColorPalette) => StyleSheet.create({
   date: { fontSize: 12, color: c.textQuaternary, marginTop: 16, marginBottom: 16, letterSpacing: 0.3 },
 
   // Table
-  table: { backgroundColor: c.cardBg, borderRadius: RADIUS.md, marginBottom: 14, overflow: 'hidden', position: 'relative' as const },
-  accentStrip: { position: 'absolute' as const, left: 0, top: 0, bottom: 0, width: 3, backgroundColor: c.brand, borderTopLeftRadius: RADIUS.md, borderBottomLeftRadius: RADIUS.md },
+  table: { backgroundColor: c.cardBg, borderRadius: RADIUS.md, marginBottom: 14, overflow: 'hidden' },
 
   tableHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingLeft: 20, paddingTop: 16, paddingBottom: 12 },
   tableName: { fontSize: 16, fontWeight: '700', color: c.text, letterSpacing: -0.2 },
