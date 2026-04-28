@@ -70,6 +70,108 @@ export function NutritionPlanScreen() {
     } else { spinAnim.setValue(0); }
   }, [loading]);
 
+  // ── Estimated kcal/price for common foods (fallback when AI returns 0) ──
+  const FOOD_DB: Record<string, { kcal: number; price: number }> = {
+    // Grains & Staples
+    'poha': { kcal: 270, price: 15 }, 'flattened rice': { kcal: 270, price: 15 },
+    'oats': { kcal: 280, price: 25 }, 'porridge': { kcal: 280, price: 25 },
+    'rice': { kcal: 210, price: 12 }, 'brown rice': { kcal: 215, price: 18 },
+    'chapati': { kcal: 120, price: 5 }, 'roti': { kcal: 120, price: 5 },
+    'paratha': { kcal: 180, price: 10 }, 'idli': { kcal: 130, price: 12 },
+    'dosa': { kcal: 170, price: 15 }, 'upma': { kcal: 230, price: 12 },
+    'bread': { kcal: 130, price: 8 }, 'puri': { kcal: 150, price: 8 },
+    // Pulses & Legumes
+    'dal': { kcal: 180, price: 20 }, 'lentil': { kcal: 180, price: 20 },
+    'rajma': { kcal: 210, price: 25 }, 'chole': { kcal: 200, price: 22 },
+    'chana': { kcal: 200, price: 22 }, 'moong': { kcal: 180, price: 18 },
+    'sprouts': { kcal: 150, price: 18 }, 'chickpea': { kcal: 200, price: 22 },
+    // Dairy
+    'milk': { kcal: 120, price: 15 }, 'curd': { kcal: 100, price: 12 },
+    'yogurt': { kcal: 100, price: 12 }, 'paneer': { kcal: 260, price: 40 },
+    'cheese': { kcal: 300, price: 50 }, 'buttermilk': { kcal: 40, price: 10 },
+    'lassi': { kcal: 150, price: 20 }, 'ghee': { kcal: 45, price: 8 },
+    // Vegetables
+    'sabzi': { kcal: 120, price: 25 }, 'vegetable': { kcal: 120, price: 25 },
+    'spinach': { kcal: 60, price: 15 }, 'palak': { kcal: 60, price: 15 },
+    'carrot': { kcal: 45, price: 10 }, 'tomato': { kcal: 25, price: 8 },
+    'potato': { kcal: 130, price: 10 }, 'broccoli': { kcal: 55, price: 30 },
+    'salad': { kcal: 45, price: 15 }, 'cucumber': { kcal: 15, price: 8 },
+    'onion': { kcal: 40, price: 5 }, 'peas': { kcal: 80, price: 12 },
+    'capsicum': { kcal: 30, price: 12 }, 'cauliflower': { kcal: 50, price: 15 },
+    'gourd': { kcal: 40, price: 10 }, 'bhindi': { kcal: 35, price: 12 },
+    'beetroot': { kcal: 50, price: 15 }, 'sweet potato': { kcal: 115, price: 12 },
+    // Fruits
+    'apple': { kcal: 95, price: 30 }, 'banana': { kcal: 105, price: 6 },
+    'orange': { kcal: 62, price: 12 }, 'mango': { kcal: 100, price: 20 },
+    'papaya': { kcal: 60, price: 15 }, 'guava': { kcal: 68, price: 10 },
+    'watermelon': { kcal: 50, price: 10 }, 'grapes': { kcal: 70, price: 20 },
+    'pomegranate': { kcal: 83, price: 30 }, 'kiwi': { kcal: 42, price: 25 },
+    'pear': { kcal: 100, price: 20 }, 'berries': { kcal: 60, price: 40 },
+    // Protein
+    'egg': { kcal: 155, price: 14 }, 'boiled egg': { kcal: 155, price: 14 },
+    'chicken': { kcal: 250, price: 50 }, 'fish': { kcal: 200, price: 60 },
+    'mutton': { kcal: 290, price: 80 }, 'prawn': { kcal: 100, price: 70 },
+    'tofu': { kcal: 150, price: 30 }, 'soya': { kcal: 170, price: 15 },
+    // Nuts & Seeds
+    'almond': { kcal: 70, price: 25 }, 'walnut': { kcal: 90, price: 30 },
+    'peanut': { kcal: 80, price: 10 }, 'cashew': { kcal: 80, price: 30 },
+    'flaxseed': { kcal: 55, price: 12 }, 'chia': { kcal: 60, price: 20 },
+    'sesame': { kcal: 50, price: 8 }, 'pumpkin seed': { kcal: 60, price: 20 },
+    'sunflower': { kcal: 60, price: 15 },
+    // Beverages
+    'tea': { kcal: 5, price: 5 }, 'green tea': { kcal: 5, price: 10 },
+    'coffee': { kcal: 5, price: 10 }, 'juice': { kcal: 90, price: 20 },
+    'lemon': { kcal: 15, price: 5 }, 'coconut water': { kcal: 45, price: 20 },
+    'smoothie': { kcal: 180, price: 30 },
+    // Water
+    'water': { kcal: 0, price: 0 },
+    // Misc
+    'chutney': { kcal: 30, price: 8 }, 'pickle': { kcal: 20, price: 5 },
+    'sambar': { kcal: 150, price: 15 }, 'rasam': { kcal: 60, price: 10 },
+    'raita': { kcal: 70, price: 10 }, 'soup': { kcal: 100, price: 20 },
+    'khichdi': { kcal: 250, price: 20 }, 'biryani': { kcal: 350, price: 40 },
+    'curry': { kcal: 200, price: 30 }, 'pulao': { kcal: 280, price: 25 },
+  };
+
+  function estimateFood(name: string): { kcal: number; price: number } {
+    const lower = name.toLowerCase();
+    // Try exact match first, then partial
+    for (const [key, val] of Object.entries(FOOD_DB)) {
+      if (lower.includes(key)) return val;
+    }
+    // Default for unknown foods
+    return { kcal: 120, price: 20 };
+  }
+
+  function normalizePlan(raw: any): PlanData {
+    const plan: PlanData = {
+      planDate: raw.planDate || new Date().toISOString().slice(0, 10),
+      currency: raw.currency || '₹',
+      meals: {},
+    };
+
+    const mealsObj = raw.meals || {};
+    for (const [key, mealRaw] of Object.entries(mealsObj)) {
+      const meal = mealRaw as any;
+      const items: FoodItem[] = (meal.items || []).map((item: any) => {
+        let kcal = typeof item.kcal === 'number' ? item.kcal : parseInt(item.kcal) || 0;
+        let price = typeof item.price === 'number' ? item.price : parseInt(item.price) || 0;
+        const foodName = item.food || item.name || 'Food';
+
+        // If AI returned 0 or missing, estimate from food database
+        if (kcal <= 0 || price <= 0) {
+          const est = estimateFood(foodName);
+          if (kcal <= 0) kcal = est.kcal;
+          if (price <= 0) price = est.price;
+        }
+
+        return { food: foodName, kcal, price };
+      });
+      plan.meals[key] = { time: meal.time || '', items };
+    }
+    return plan;
+  }
+
   async function generatePlan() {
     if (loading) return;
     setLoading(true); setError('');
@@ -96,9 +198,10 @@ export function NutritionPlanScreen() {
       }
       const result = await generateNutritionPlan({ nutrientScores: scores, userAge, userSex, userPhone });
       if (result.plan) {
-        setPlan(result.plan);
+        const normalized = normalizePlan(result.plan);
+        setPlan(normalized);
         setChecked({});
-        await AsyncStorage.setItem(PLAN_CACHE_KEY, JSON.stringify(result.plan));
+        await AsyncStorage.setItem(PLAN_CACHE_KEY, JSON.stringify(normalized));
         await AsyncStorage.setItem(CHECK_CACHE_KEY, '{}');
         setRetryCount(0);
       }
