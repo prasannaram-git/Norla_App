@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SPACING, RADIUS } from '../../lib/theme';
+import { useTheme } from '../../lib/ThemeContext';
+import { SPACING, RADIUS, type ColorPalette } from '../../lib/theme';
 import { QUESTIONNAIRE_STEPS, DEFAULT_QUESTIONNAIRE } from '../../lib/questionnaire-config';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { ScanStackParamList } from '../../navigation/MainTabs';
@@ -10,6 +11,7 @@ type Props = NativeStackScreenProps<ScanStackParamList, 'Questionnaire'>;
 
 export function QuestionnaireScreen({ navigation, route }: Props) {
   const { images } = route.params;
+  const { colors } = useTheme();
   const [stepIdx, setStepIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({ ...DEFAULT_QUESTIONNAIRE });
   const currentStep = QUESTIONNAIRE_STEPS[stepIdx];
@@ -23,6 +25,7 @@ export function QuestionnaireScreen({ navigation, route }: Props) {
   };
 
   const isLast = stepIdx >= total - 1;
+  const s = makeStyles(colors);
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
@@ -65,13 +68,13 @@ export function QuestionnaireScreen({ navigation, route }: Props) {
             )}
 
             {/* Pills */}
-            {q.type === 'pills' && q.options && (
+            {q.type === 'pills' && (
               <View style={s.pillsRow}>
-                {q.options.map(opt => {
-                  const active = answers[q.field] === opt.value;
+                {q.options?.map(opt => {
+                  const active = answers[q.field] === opt;
                   return (
-                    <TouchableOpacity key={opt.value} style={[s.pill, active && s.pillActive]} onPress={() => set(q.field, opt.value)} activeOpacity={0.7}>
-                      <Text style={[s.pillText, active && s.pillTextActive]}>{opt.label}</Text>
+                    <TouchableOpacity key={opt} style={[s.pill, active && s.pillActive]} onPress={() => set(q.field, opt)} activeOpacity={0.7}>
+                      <Text style={[s.pillText, active && s.pillTextActive]}>{opt}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -84,10 +87,9 @@ export function QuestionnaireScreen({ navigation, route }: Props) {
                 <Text style={s.toggleLabel}>{answers[q.field] ? 'Yes' : 'No'}</Text>
                 <Switch
                   value={!!answers[q.field]}
-                  onValueChange={val => set(q.field, val)}
-                  trackColor={{ false: COLORS.hairline, true: '#86EFAC' }}
-                  thumbColor={answers[q.field] ? COLORS.brand : '#E0E0E0'}
-                  ios_backgroundColor={COLORS.hairline}
+                  onValueChange={v => set(q.field, v)}
+                  trackColor={{ false: colors.hairline, true: colors.brand + '60' }}
+                  thumbColor={answers[q.field] ? colors.brand : colors.textQuaternary}
                 />
               </View>
             )}
@@ -95,7 +97,7 @@ export function QuestionnaireScreen({ navigation, route }: Props) {
         ))}
       </ScrollView>
 
-      {/* Bottom pinned buttons */}
+      {/* Bottom bar */}
       <View style={s.bottomBar}>
         {stepIdx > 0 && (
           <TouchableOpacity onPress={() => setStepIdx(stepIdx - 1)} style={s.backBtn} activeOpacity={0.7}>
@@ -114,40 +116,39 @@ export function QuestionnaireScreen({ navigation, route }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.white },
+const makeStyles = (c: ColorPalette) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
   progressRow: { flexDirection: 'row', gap: 6, paddingHorizontal: SPACING.xxl, paddingTop: 8, paddingBottom: 16 },
-  bar: { flex: 1, height: 3, backgroundColor: COLORS.hairline, borderRadius: 2 },
-  barActive: { backgroundColor: COLORS.text },
+  bar: { flex: 1, height: 3, backgroundColor: c.hairline, borderRadius: 2 },
+  barActive: { backgroundColor: c.brand },
 
   scroll: { paddingHorizontal: SPACING.xxl, paddingBottom: 24 },
-  step: { fontSize: 12, color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
-  title: { fontSize: 24, fontWeight: '700', color: COLORS.text, letterSpacing: -0.4 },
-  sub: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4, marginBottom: 28 },
+  step: { fontSize: 12, color: c.textTertiary, textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 4 },
+  title: { fontSize: 24, fontWeight: '700', color: c.text, letterSpacing: -0.4 },
+  sub: { fontSize: 14, color: c.textSecondary, marginTop: 4, marginBottom: 28 },
 
   questionWrap: { paddingBottom: 24, marginBottom: 24 },
-  qBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.hairline },
-  qText: { fontSize: 15, fontWeight: '600', color: COLORS.text, lineHeight: 22 },
-  qDesc: { fontSize: 13, color: COLORS.textTertiary, marginTop: 4, marginBottom: 4 },
+  qBorder: { borderBottomWidth: 1, borderBottomColor: c.hairline },
+  qText: { fontSize: 15, fontWeight: '600', color: c.text, lineHeight: 22 },
+  qDesc: { fontSize: 13, color: c.textTertiary, marginTop: 4, marginBottom: 4 },
 
   sliderLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, marginBottom: 8 },
-  sliderLabel: { fontSize: 11, color: COLORS.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sliderLabel: { fontSize: 11, color: c.textTertiary, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
   dotsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  dot: { width: 52, height: 40, borderRadius: 8, backgroundColor: COLORS.bgSecondary, justifyContent: 'center', alignItems: 'center' },
-  dotActive: { backgroundColor: COLORS.text },
-  dotText: { fontSize: 15, fontWeight: '700', color: COLORS.textTertiary },
-  dotTextActive: { color: COLORS.white },
+  dot: { width: 52, height: 40, borderRadius: 8, backgroundColor: c.bgTertiary, borderWidth: 1, borderColor: c.border, justifyContent: 'center', alignItems: 'center' },
+  dotActive: { backgroundColor: c.brand, borderColor: c.brand },
+  dotText: { fontSize: 15, fontWeight: '700', color: c.textTertiary },
+  dotTextActive: { color: '#FFFFFF' },
 
   pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  pill: { paddingHorizontal: 16, height: 36, borderRadius: RADIUS.full, backgroundColor: COLORS.bgSecondary, justifyContent: 'center' },
-  pillActive: { backgroundColor: COLORS.text },
-  pillText: { fontSize: 14, fontWeight: '500', color: COLORS.textSecondary },
-  pillTextActive: { color: COLORS.white },
+  pill: { paddingHorizontal: 16, height: 36, borderRadius: RADIUS.full, backgroundColor: c.bgTertiary, borderWidth: 1, borderColor: c.border, justifyContent: 'center' },
+  pillActive: { backgroundColor: c.brand, borderColor: c.brand },
+  pillText: { fontSize: 14, fontWeight: '500', color: c.textSecondary },
+  pillTextActive: { color: '#FFFFFF' },
 
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-  toggleLabel: { fontSize: 15, fontWeight: '500', color: COLORS.textSecondary },
+  toggleLabel: { fontSize: 15, fontWeight: '500', color: c.textSecondary },
 
-  // Bottom pinned bar
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -156,11 +157,11 @@ const s = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.hairline,
-    backgroundColor: COLORS.white,
+    borderTopColor: c.hairline,
+    backgroundColor: c.bg,
   },
   backBtn: { paddingVertical: 14, paddingHorizontal: 16 },
-  backText: { fontSize: 15, fontWeight: '500', color: COLORS.textSecondary },
-  nextBtn: { flex: 1, height: 52, borderRadius: RADIUS.md, backgroundColor: COLORS.text, justifyContent: 'center', alignItems: 'center' },
-  nextText: { fontSize: 16, fontWeight: '600', color: COLORS.white },
+  backText: { fontSize: 15, fontWeight: '500', color: c.textSecondary },
+  nextBtn: { flex: 1, height: 52, borderRadius: RADIUS.md, backgroundColor: c.brand, justifyContent: 'center', alignItems: 'center' },
+  nextText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
 });

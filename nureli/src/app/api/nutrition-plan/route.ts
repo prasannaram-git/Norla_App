@@ -68,7 +68,7 @@ PATIENT: ${ageStr}, ${sexStr}
 DEFICIENCIES: ${deficient.length > 0 ? deficient.join(', ') : 'None identified'}
 CURRENCY: ${cur.symbol} (${cur.name})
 
-Return ONLY valid JSON (no markdown, no text outside JSON):
+Return ONLY valid JSON (no markdown, no explanations):
 {
   "planDate": "${new Date().toISOString().slice(0, 10)}",
   "currency": "${cur.symbol}",
@@ -76,42 +76,54 @@ Return ONLY valid JSON (no markdown, no text outside JSON):
     "breakfast": {
       "time": "7:00 - 8:30 AM",
       "items": [
-        { "food": "<food name>", "kcal": <number>, "price": <number in ${cur.code}> }
+        { "food": "Oats Porridge", "kcal": 280, "price": 25 },
+        { "food": "Banana", "kcal": 105, "price": 10 },
+        { "food": "Boiled Eggs (2)", "kcal": 155, "price": 20 }
       ]
     },
     "midMorning": {
       "time": "10:30 - 11:00 AM",
       "items": [
-        { "food": "<name>", "kcal": <number>, "price": <number> }
+        { "food": "Apple", "kcal": 95, "price": 30 },
+        { "food": "Almonds (10 pcs)", "kcal": 70, "price": 25 }
       ]
     },
     "lunch": {
       "time": "12:30 - 1:30 PM",
       "items": [
-        { "food": "<name>", "kcal": <number>, "price": <number> }
+        { "food": "Brown Rice (1 cup)", "kcal": 215, "price": 15 },
+        { "food": "Dal Tadka (1 bowl)", "kcal": 180, "price": 20 },
+        { "food": "Mixed Sabzi", "kcal": 120, "price": 25 }
       ]
     },
     "evening": {
       "time": "4:00 - 5:00 PM",
       "items": [
-        { "food": "<name>", "kcal": <number>, "price": <number> }
+        { "food": "Sprouts Chaat", "kcal": 150, "price": 20 },
+        { "food": "Green Tea", "kcal": 5, "price": 10 }
       ]
     },
     "dinner": {
       "time": "7:30 - 8:30 PM",
       "items": [
-        { "food": "<name>", "kcal": <number>, "price": <number> }
+        { "food": "Chapati (2)", "kcal": 240, "price": 10 },
+        { "food": "Paneer Curry", "kcal": 260, "price": 40 },
+        { "food": "Salad", "kcal": 45, "price": 15 }
       ]
     }
   }
 }
 
-RULES:
-- Each meal: exactly 3-4 food items
-- Use locally available foods for the patient's region
-- kcal: accurate calorie count per serving
-- price: realistic current local market/grocery price per serving in ${cur.code} (integer, no decimals)
-- Return ONLY valid JSON, nothing else`;
+The above is ONLY AN EXAMPLE. You MUST create a DIFFERENT plan customized for this patient's deficiencies.
+
+CRITICAL RULES:
+- Replace ALL example foods with foods that address the patient's deficiencies
+- Every "kcal" MUST be the real calorie count (NEVER 0, minimum 5)
+- Every "price" MUST be realistic local grocery price in ${cur.code} (NEVER 0, minimum 5)
+- Each meal: 2-4 items
+- Use locally available foods appropriate for the patient's region
+- Food names should be short (max 4 words), put quantity in parentheses
+- Return ONLY the JSON object, nothing else`;
 }
 
 function extractJSON(text: string): any {

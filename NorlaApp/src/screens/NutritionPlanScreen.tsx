@@ -18,13 +18,6 @@ const MEAL_LABELS: Record<string, string> = {
   evening: 'Evening Snack',
   dinner: 'Dinner',
 };
-const MEAL_ICONS: Record<string, string> = {
-  breakfast: '🌅',
-  midMorning: '☀️',
-  lunch: '🍽️',
-  evening: '🌤️',
-  dinner: '🌙',
-};
 const MEAL_ORDER = ['breakfast', 'midMorning', 'lunch', 'evening', 'dinner'];
 
 interface FoodItem { food: string; kcal: number; price: number; }
@@ -46,7 +39,6 @@ export function NutritionPlanScreen() {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const spinAnim = useState(() => new Animated.Value(0))[0];
 
-  // Load cached plan + checks on focus
   useFocusEffect(useCallback(() => {
     (async () => {
       const [cachedPlan, cachedChecks] = await Promise.all([
@@ -118,7 +110,7 @@ export function NutritionPlanScreen() {
   const s = makeStyles(colors);
   const cur = plan?.currency || '₹';
 
-  // ── Compute totals ──
+  // Compute totals
   let totalKcal = 0, totalPrice = 0, checkedKcal = 0, checkedPrice = 0;
   if (plan) {
     MEAL_ORDER.forEach(mealKey => {
@@ -141,7 +133,6 @@ export function NutritionPlanScreen() {
       <SafeAreaView style={s.safe} edges={['top']}>
         <View style={s.topBar}><TouchableOpacity onPress={() => nav.goBack()} activeOpacity={0.6}><Text style={s.back}>‹ Back</Text></TouchableOpacity></View>
         <View style={s.center}>
-          <Text style={s.centerIcon}>📋</Text>
           <Text style={s.centerTitle}>Nutrition Plan</Text>
           <Text style={s.centerSub}>Complete your first scan to get a personalized meal plan.</Text>
         </View>
@@ -181,7 +172,6 @@ export function NutritionPlanScreen() {
 
   if (!plan) return null;
 
-  // ── Plan View ──
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {/* Header */}
@@ -191,44 +181,46 @@ export function NutritionPlanScreen() {
         </TouchableOpacity>
         <Text style={s.headerTitle}>Daily Plan</Text>
         <TouchableOpacity onPress={() => { setRetryCount(0); generatePlan(); }} activeOpacity={0.6} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={s.refresh}>{loading ? '...' : '↻'}</Text>
+          <Text style={s.refresh}>{loading ? 'Loading...' : 'Refresh'}</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <Text style={s.date}>{plan.planDate}</Text>
 
-        {/* ── 5 Meal Tables ── */}
+        {/* 5 Meal Tables */}
         {MEAL_ORDER.map(mealKey => {
           const meal = plan.meals?.[mealKey];
           if (!meal?.items?.length) return null;
-          const mealKcal = meal.items.reduce((s, i) => s + (i.kcal || 0), 0);
-          const mealPrice = meal.items.reduce((s, i) => s + (i.price || 0), 0);
+          const mealKcal = meal.items.reduce((sum, i) => sum + (i.kcal || 0), 0);
+          const mealPrice = meal.items.reduce((sum, i) => sum + (i.price || 0), 0);
 
           return (
             <View key={mealKey} style={s.table}>
-              {/* Meal Header */}
+              {/* Brand accent strip */}
+              <View style={s.accentStrip} />
+
+              {/* Meal header */}
               <View style={s.tableHeader}>
-                <Text style={s.tableIcon}>{MEAL_ICONS[mealKey] || '🍽️'}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={s.tableName}>{MEAL_LABELS[mealKey]}</Text>
                   <Text style={s.tableTime}>{meal.time}</Text>
                 </View>
                 <View style={s.mealTotals}>
-                  <Text style={s.mealTotalVal}>{mealKcal} kcal</Text>
+                  <Text style={s.mealTotalKcal}>{mealKcal} kcal</Text>
                   <Text style={s.mealTotalPrice}>{cur}{mealPrice}</Text>
                 </View>
               </View>
 
-              {/* Column Headers */}
+              {/* Column header */}
               <View style={s.colHead}>
-                <Text style={[s.colLabel, { flex: 1 }]}>Food</Text>
-                <Text style={[s.colLabel, s.colRight, { width: 52 }]}>Kcal</Text>
-                <Text style={[s.colLabel, s.colRight, { width: 56 }]}>Price</Text>
-                <Text style={[s.colLabel, s.colCenter, { width: 36 }]}>✓</Text>
+                <Text style={[s.colLabel, { flex: 1 }]}>FOOD</Text>
+                <Text style={[s.colLabel, { width: 50, textAlign: 'right' }]}>KCAL</Text>
+                <Text style={[s.colLabel, { width: 54, textAlign: 'right' }]}>PRICE</Text>
+                <View style={{ width: 36 }} />
               </View>
 
-              {/* Food Rows */}
+              {/* Food rows */}
               {meal.items.map((item, idx) => {
                 const key = `${mealKey}-${idx}`;
                 const isChecked = !!checked[key];
@@ -239,10 +231,10 @@ export function NutritionPlanScreen() {
                     onPress={() => toggleCheck(key)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[s.foodName, isChecked && s.foodChecked]} numberOfLines={2}>{item.food}</Text>
-                    <Text style={[s.foodVal, isChecked && s.foodChecked]}>{item.kcal || 0}</Text>
-                    <Text style={[s.foodPrice, isChecked && s.foodChecked]}>{cur}{item.price || 0}</Text>
-                    <View style={[s.checkbox, isChecked && s.checkboxActive]}>
+                    <Text style={[s.foodName, isChecked && s.checkedText]} numberOfLines={2}>{item.food}</Text>
+                    <Text style={[s.foodKcal, isChecked && s.checkedText]}>{item.kcal || '-'}</Text>
+                    <Text style={[s.foodPrice, isChecked && s.checkedText]}>{cur}{item.price || 0}</Text>
+                    <View style={[s.checkbox, isChecked && s.checkboxOn]}>
                       {isChecked && <Text style={s.checkmark}>✓</Text>}
                     </View>
                   </TouchableOpacity>
@@ -252,26 +244,26 @@ export function NutritionPlanScreen() {
           );
         })}
 
-        {/* ── Totals ── */}
+        {/* Totals */}
         <View style={s.totalsCard}>
           <View style={s.totalRow}>
             <Text style={s.totalLabel}>Total Calories</Text>
-            <Text style={s.totalValue}>
-              {checkedKcal > 0 && <Text style={s.totalChecked}>{checkedKcal} / </Text>}
-              {totalKcal} kcal
-            </Text>
+            <View style={s.totalRight}>
+              {checkedKcal > 0 && <Text style={s.totalDone}>{checkedKcal} / </Text>}
+              <Text style={s.totalValue}>{totalKcal} kcal</Text>
+            </View>
           </View>
-          <View style={[s.totalRow, { marginTop: 10 }]}>
-            <Text style={s.totalLabel}>Total Cost</Text>
-            <Text style={s.totalValue}>
-              {checkedPrice > 0 && <Text style={s.totalChecked}>{cur}{checkedPrice} / </Text>}
-              {cur}{totalPrice}
-            </Text>
+          <View style={s.totalDivider} />
+          <View style={s.totalRow}>
+            <Text style={s.totalLabel}>Estimated Cost</Text>
+            <View style={s.totalRight}>
+              {checkedPrice > 0 && <Text style={s.totalDone}>{cur}{checkedPrice} / </Text>}
+              <Text style={s.totalValue}>{cur}{totalPrice}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Disclaimer */}
-        <Text style={s.disclaimer}>AI-generated plan. Prices are estimated. Not medical advice.</Text>
+        <Text style={s.disclaimer}>AI-generated plan · Prices are estimated · Not medical advice</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -279,61 +271,61 @@ export function NutritionPlanScreen() {
 
 const makeStyles = (c: ColorPalette) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: c.bg },
-  scroll: { paddingHorizontal: 20, paddingBottom: 50 },
-
-  // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: c.text, letterSpacing: -0.3 },
-  back: { fontSize: 16, fontWeight: '500', color: c.textTertiary },
-  refresh: { fontSize: 22, color: c.brand, fontWeight: '600' },
-  date: { fontSize: 13, color: c.textQuaternary, marginBottom: 16 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 60 },
   topBar: { paddingHorizontal: 20, paddingVertical: 12 },
 
+  // Header
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.hairline },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: c.text, letterSpacing: -0.3 },
+  back: { fontSize: 16, fontWeight: '500', color: c.textTertiary },
+  refresh: { fontSize: 13, fontWeight: '600', color: c.brand },
+  date: { fontSize: 12, color: c.textQuaternary, marginTop: 16, marginBottom: 16, letterSpacing: 0.3 },
+
   // Table
-  table: { backgroundColor: c.cardBg, borderRadius: RADIUS.md, marginBottom: 12, overflow: 'hidden' },
-  tableHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingBottom: 12 },
-  tableIcon: { fontSize: 22, marginRight: 10 },
-  tableName: { fontSize: 16, fontWeight: '700', color: c.text, letterSpacing: -0.3 },
-  tableTime: { fontSize: 11, color: c.textQuaternary, marginTop: 1 },
+  table: { backgroundColor: c.cardBg, borderRadius: RADIUS.md, marginBottom: 14, overflow: 'hidden', position: 'relative' as const },
+  accentStrip: { position: 'absolute' as const, left: 0, top: 0, bottom: 0, width: 3, backgroundColor: c.brand, borderTopLeftRadius: RADIUS.md, borderBottomLeftRadius: RADIUS.md },
+
+  tableHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingLeft: 20, paddingTop: 16, paddingBottom: 12 },
+  tableName: { fontSize: 16, fontWeight: '700', color: c.text, letterSpacing: -0.2 },
+  tableTime: { fontSize: 11, color: c.textQuaternary, marginTop: 2 },
   mealTotals: { alignItems: 'flex-end' },
-  mealTotalVal: { fontSize: 13, fontWeight: '600', color: c.text },
-  mealTotalPrice: { fontSize: 11, color: c.brand, fontWeight: '600', marginTop: 1 },
+  mealTotalKcal: { fontSize: 14, fontWeight: '700', color: c.text },
+  mealTotalPrice: { fontSize: 12, color: c.brand, fontWeight: '600', marginTop: 1 },
 
   // Column headers
-  colHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: c.bgTertiary },
-  colLabel: { fontSize: 11, fontWeight: '600', color: c.textQuaternary, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
-  colRight: { textAlign: 'right' },
-  colCenter: { textAlign: 'center' },
+  colHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 8, borderTopWidth: 1, borderTopColor: c.hairline, borderBottomWidth: 1, borderBottomColor: c.hairline },
+  colLabel: { fontSize: 10, fontWeight: '700', color: c.textQuaternary, letterSpacing: 0.8 },
 
   // Food rows
-  foodRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  foodRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 13 },
   foodBorder: { borderTopWidth: 1, borderTopColor: c.hairline },
   foodName: { flex: 1, fontSize: 14, fontWeight: '500', color: c.text, paddingRight: 8 },
-  foodVal: { width: 52, fontSize: 13, fontWeight: '600', color: c.textSecondary, textAlign: 'right' },
-  foodPrice: { width: 56, fontSize: 13, fontWeight: '600', color: c.brand, textAlign: 'right' },
-  foodChecked: { opacity: 0.35, textDecorationLine: 'line-through' as const },
+  foodKcal: { width: 50, fontSize: 13, fontWeight: '600', color: c.textSecondary, textAlign: 'right' },
+  foodPrice: { width: 54, fontSize: 13, fontWeight: '600', color: c.brand, textAlign: 'right' },
+  checkedText: { opacity: 0.3, textDecorationLine: 'line-through' as const },
 
   // Checkbox
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: c.border, justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
-  checkboxActive: { backgroundColor: c.brand, borderColor: c.brand },
-  checkmark: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: c.border, justifyContent: 'center', alignItems: 'center', marginLeft: 12 },
+  checkboxOn: { backgroundColor: c.brand, borderColor: c.brand },
+  checkmark: { fontSize: 12, fontWeight: '800', color: '#fff', marginTop: -1 },
 
   // Totals
-  totalsCard: { backgroundColor: c.cardBg, borderRadius: RADIUS.md, padding: 18, marginBottom: 10, borderWidth: 1, borderColor: c.brand + '30' },
+  totalsCard: { backgroundColor: c.cardBg, borderRadius: RADIUS.md, padding: 18, marginTop: 4, marginBottom: 8, borderWidth: 1, borderColor: c.brand + '25' },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalLabel: { fontSize: 14, fontWeight: '600', color: c.textTertiary },
+  totalRight: { flexDirection: 'row', alignItems: 'baseline' },
+  totalLabel: { fontSize: 13, fontWeight: '600', color: c.textTertiary },
   totalValue: { fontSize: 16, fontWeight: '700', color: c.text },
-  totalChecked: { fontSize: 14, fontWeight: '600', color: c.brand },
+  totalDone: { fontSize: 13, fontWeight: '600', color: c.brand },
+  totalDivider: { height: 1, backgroundColor: c.hairline, marginVertical: 12 },
 
   // Disclaimer
   disclaimer: { fontSize: 11, color: c.textQuaternary, textAlign: 'center', marginTop: 12, marginBottom: 20 },
 
   // Center states
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  centerIcon: { fontSize: 48, marginBottom: 16 },
   centerTitle: { fontSize: 22, fontWeight: '700', color: c.text, marginBottom: 8 },
   centerSub: { fontSize: 14, color: c.textTertiary, textAlign: 'center', lineHeight: 21 },
   spinner: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: c.hairline, borderTopColor: c.brand, marginBottom: 24 },
-  retryBtn: { marginTop: 20, backgroundColor: c.invertedBg, borderRadius: RADIUS.md, paddingVertical: 14, paddingHorizontal: 36 },
-  retryText: { fontSize: 15, fontWeight: '700', color: c.invertedText },
+  retryBtn: { marginTop: 20, backgroundColor: c.brand, borderRadius: RADIUS.md, paddingVertical: 14, paddingHorizontal: 36 },
+  retryText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });
