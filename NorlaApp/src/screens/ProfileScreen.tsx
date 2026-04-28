@@ -1,11 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, Switch } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, Switch, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, CommonActions } from '@react-navigation/native';
 import { useTheme } from '../lib/ThemeContext';
 import { SPACING, RADIUS, type ColorPalette } from '../lib/theme';
-import { getProfile, clearSession, getScans, type UserProfile, type ScanCache } from '../lib/storage';
-import { deleteAccount } from '../lib/api';
+import { getProfile, saveProfile, clearSession, getScans, type UserProfile, type ScanCache } from '../lib/storage';
+import { deleteAccount, syncProfile } from '../lib/api';
 import { APP_VERSION } from '../lib/constants';
 
 function formatDob(dob: string): string {
@@ -31,8 +31,21 @@ export function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [scans, setScans] = useState<ScanCache[]>([]);
 
+  // Edit state
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editHeight, setEditHeight] = useState('');
+  const [editWeight, setEditWeight] = useState('');
+
   useFocusEffect(useCallback(() => {
-    getProfile().then(setProfile);
+    getProfile().then(p => {
+      setProfile(p);
+      if (p) {
+        setEditName(p.name || '');
+        setEditHeight(p.height ? String(p.height) : '');
+        setEditWeight(p.weight ? String(p.weight) : '');
+      }
+    });
     getScans().then(setScans);
   }, []));
 
@@ -51,6 +64,37 @@ export function ProfileScreen() {
     return { strengths: entries.slice(0, 3), focus: entries.slice(-3).reverse() };
   };
   const { strengths, focus } = getNutrientInsights();
+
+  const startEdit = () => {
+    if (profile) {
+      setEditName(profile.name || '');
+      setEditHeight(profile.height ? String(profile.height) : '');
+      setEditWeight(profile.weight ? String(profile.weight) : '');
+    }
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    Keyboard.dismiss();
+  };
+
+  const handleSave = async () => {
+    if (!profile) return;
+    const trimName = editName.trim();
+    if (trimName.length < 2) { Alert.alert('Invalid', 'Name must be at least 2 characters.'); return; }
+    const h = editHeight ? parseFloat(editHeight) : undefined;
+    const w = editWeight ? parseFloat(editWeight) : undefined;
+    if (h !== undefined && (h < 50 || h > 300)) { Alert.alert('Invalid', 'Height must be 50-300 cm.'); return; }
+    if (w !== undefined && (w < 10 || w > 500)) { Alert.alert('Invalid', 'Weight must be 10-500 kg.'); return; }
+
+    const updated: UserProfile = { ...profile, name: trimName, height: h, weight: w };
+    await saveProfile(updated);
+    setProfile(updated);
+    setEditing(false);
+    Keyboard.dismiss();
+    try { syncProfile(updated); } catch {}
+  };
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -76,11 +120,13 @@ export function ProfileScreen() {
   const daysSinceLastScan = latestScan ? Math.floor((Date.now() - new Date(latestScan.createdAt).getTime()) / 86400000) : null;
   const lastScanText = daysSinceLastScan === 0 ? 'Today' : daysSinceLastScan === 1 ? 'Yesterday' : `${daysSinceLastScan}d ago`;
 
+  const bmi = (profile?.height && profile?.weight) ? (profile.weight / ((profile.height / 100) ** 2)).toFixed(1) : null;
+
   const s = makeStyles(colors);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         <Text style={s.pageTitle}>Profile</Text>
 
@@ -165,21 +211,110 @@ export function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── Personal Info ── */}
+        {/* ── Personal Info (Editable) ── */}
         <View style={s.card}>
-          <Text style={s.cardLabel}>PERSONAL INFORMATION</Text>
+          <View style={s.cardHeaderRow}>
+            <Text style={s.cardLabel}>PERSONAL INFORMATION</Text>
+            {!editing ? (
+              <TouchableOpacity onPress={startEdit} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={s.editBtn}>Edit</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={s.editActions}>
+                <TouchableOpacity onPress={cancelEdit} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={s.cancelBtn}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleSave} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={s.saveBtn}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {/* Name */}
           <View style={s.infoRow}>
+            <Text style={s.infoLabel}>Name</Text>
+            {editing ? (
+              <TextInput
+                style={s.infoInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Your name"
+                placeholderTextColor={colors.textQuaternary}
+                autoCapitalize="words"
+              />
+            ) : (
+              <Text style={s.infoValue}>{profile?.name || '--'}</Text>
+            )}
+          </View>
+
+          {/* Phone (read-only) */}
+          <View style={[s.infoRow, s.infoRowBorder]}>
             <Text style={s.infoLabel}>Phone</Text>
             <Text style={s.infoValue}>{profile?.phone || '--'}</Text>
           </View>
+
+          {/* DOB (read-only) */}
           <View style={[s.infoRow, s.infoRowBorder]}>
             <Text style={s.infoLabel}>Date of Birth</Text>
             <Text style={s.infoValue}>{formatDob(profile?.dob || '')}</Text>
           </View>
+
+          {/* Sex (read-only) */}
           <View style={[s.infoRow, s.infoRowBorder]}>
             <Text style={s.infoLabel}>Sex</Text>
             <Text style={s.infoValue}>{profile?.sex ? profile.sex.charAt(0).toUpperCase() + profile.sex.slice(1) : '--'}</Text>
           </View>
+
+          {/* Height */}
+          <View style={[s.infoRow, s.infoRowBorder]}>
+            <Text style={s.infoLabel}>Height</Text>
+            {editing ? (
+              <View style={s.unitInputRow}>
+                <TextInput
+                  style={s.infoInputSmall}
+                  value={editHeight}
+                  onChangeText={t => setEditHeight(t.replace(/[^0-9.]/g, ''))}
+                  placeholder="170"
+                  placeholderTextColor={colors.textQuaternary}
+                  keyboardType="numeric"
+                  maxLength={5}
+                />
+                <Text style={s.unitText}>cm</Text>
+              </View>
+            ) : (
+              <Text style={s.infoValue}>{profile?.height ? `${profile.height} cm` : '--'}</Text>
+            )}
+          </View>
+
+          {/* Weight */}
+          <View style={[s.infoRow, s.infoRowBorder]}>
+            <Text style={s.infoLabel}>Weight</Text>
+            {editing ? (
+              <View style={s.unitInputRow}>
+                <TextInput
+                  style={s.infoInputSmall}
+                  value={editWeight}
+                  onChangeText={t => setEditWeight(t.replace(/[^0-9.]/g, ''))}
+                  placeholder="65"
+                  placeholderTextColor={colors.textQuaternary}
+                  keyboardType="numeric"
+                  maxLength={5}
+                />
+                <Text style={s.unitText}>kg</Text>
+              </View>
+            ) : (
+              <Text style={s.infoValue}>{profile?.weight ? `${profile.weight} kg` : '--'}</Text>
+            )}
+          </View>
+
+          {/* BMI (computed, read-only) */}
+          {bmi && (
+            <View style={[s.infoRow, s.infoRowBorder]}>
+              <Text style={s.infoLabel}>BMI</Text>
+              <Text style={s.infoValue}>{bmi}</Text>
+            </View>
+          )}
         </View>
 
         {/* ── Actions ── */}
@@ -222,6 +357,11 @@ const makeStyles = (c: ColorPalette) => StyleSheet.create({
   heroPhone: { fontSize: 14, color: c.textTertiary, marginTop: 4 },
   card: { backgroundColor: c.cardBg, borderRadius: RADIUS.md, padding: 20, marginBottom: 12 },
   cardLabel: { fontSize: 11, fontWeight: '700', color: c.textQuaternary, letterSpacing: 1.2, marginBottom: 16 },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 },
+  editBtn: { fontSize: 14, fontWeight: '600', color: c.brand },
+  editActions: { flexDirection: 'row', gap: 16 },
+  cancelBtn: { fontSize: 14, fontWeight: '500', color: c.textTertiary },
+  saveBtn: { fontSize: 14, fontWeight: '700', color: c.brand },
   healthCenter: { alignItems: 'center', marginBottom: 20 },
   scoreRing: { width: 72, height: 72, borderRadius: 36, borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
   scoreValue: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
@@ -244,6 +384,10 @@ const makeStyles = (c: ColorPalette) => StyleSheet.create({
   infoRowBorder: { borderTopWidth: 1, borderTopColor: c.hairline },
   infoLabel: { fontSize: 14, color: c.textTertiary },
   infoValue: { fontSize: 14, fontWeight: '600', color: c.text },
+  infoInput: { flex: 1, fontSize: 14, fontWeight: '600', color: c.text, textAlign: 'right', borderBottomWidth: 1, borderBottomColor: c.brand, paddingVertical: 4, marginLeft: 20 },
+  infoInputSmall: { width: 60, fontSize: 14, fontWeight: '600', color: c.text, textAlign: 'right', borderBottomWidth: 1, borderBottomColor: c.brand, paddingVertical: 4 },
+  unitInputRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  unitText: { fontSize: 13, fontWeight: '500', color: c.textTertiary },
   actionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
   actionText: { flex: 1, fontSize: 15, fontWeight: '500', color: c.text },
   chevron: { fontSize: 20, color: c.textQuaternary, fontWeight: '300' },

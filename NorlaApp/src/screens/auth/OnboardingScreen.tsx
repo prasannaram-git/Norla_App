@@ -10,7 +10,7 @@ import type { AuthStackParamList } from '../../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding'>;
 
-const STEPS = ['name', 'dob', 'sex', 'theme'] as const;
+const STEPS = ['name', 'dob', 'sex', 'body', 'theme'] as const;
 type Step = typeof STEPS[number];
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -27,6 +27,8 @@ export function OnboardingScreen({ navigation, route }: Props) {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [sex, setSex] = useState('');
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
   const [selectedTheme, setSelectedTheme] = useState(mode);
 
   const defaultYear = new Date().getFullYear() - 25;
@@ -57,12 +59,19 @@ export function OnboardingScreen({ navigation, route }: Props) {
       animateTransition('sex');
     } else if (step === 'sex') {
       if (!sex) { setError('Please select one'); return; }
+      animateTransition('body');
+    } else if (step === 'body') {
+      const h = parseFloat(height), w = parseFloat(weight);
+      if (!height || isNaN(h) || h < 50 || h > 300) { setError('Enter a valid height (50-300 cm)'); return; }
+      if (!weight || isNaN(w) || w < 10 || w > 500) { setError('Enter a valid weight (10-500 kg)'); return; }
       animateTransition('theme');
     } else {
       // Theme step — save everything
       setMode(selectedTheme);
       const dob = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
-      const profile = { phone, name: name.trim(), dob, sex };
+      const h = parseFloat(height) || undefined;
+      const w = parseFloat(weight) || undefined;
+      const profile = { phone, name: name.trim(), dob, sex, height: h, weight: w };
       await saveProfile(profile);
       syncProfile(profile);
       navigation.getParent()?.reset({ index: 0, routes: [{ name: 'Main' }] });
@@ -184,6 +193,47 @@ export function OnboardingScreen({ navigation, route }: Props) {
             </>
           )}
 
+          {/* ── Step 4: Height & Weight ── */}
+          {step === 'body' && (
+            <>
+              <Text style={s.heading}>Height & Weight</Text>
+              <Text style={s.sub}>Helps calculate BMI and personalize your plan.</Text>
+              <View style={s.bodyRow}>
+                <View style={s.bodyCol}>
+                  <Text style={s.bodyLabel}>HEIGHT</Text>
+                  <View style={s.bodyInputWrap}>
+                    <TextInput
+                      style={s.bodyInput}
+                      placeholder="170"
+                      placeholderTextColor={colors.textQuaternary}
+                      value={height}
+                      onChangeText={t => { setHeight(t.replace(/[^0-9.]/g, '')); setError(''); }}
+                      keyboardType="numeric"
+                      maxLength={5}
+                      autoFocus
+                    />
+                    <Text style={s.bodyUnit}>cm</Text>
+                  </View>
+                </View>
+                <View style={s.bodyCol}>
+                  <Text style={s.bodyLabel}>WEIGHT</Text>
+                  <View style={s.bodyInputWrap}>
+                    <TextInput
+                      style={s.bodyInput}
+                      placeholder="65"
+                      placeholderTextColor={colors.textQuaternary}
+                      value={weight}
+                      onChangeText={t => { setWeight(t.replace(/[^0-9.]/g, '')); setError(''); }}
+                      keyboardType="numeric"
+                      maxLength={5}
+                    />
+                    <Text style={s.bodyUnit}>kg</Text>
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+
           {/* ── Step 4: Theme ── */}
           {step === 'theme' && (
             <>
@@ -222,7 +272,7 @@ export function OnboardingScreen({ navigation, route }: Props) {
           {error ? <Text style={s.error}>{error}</Text> : null}
 
           <TouchableOpacity
-            style={[s.btn, step === 'name' && name.trim().length < 2 && s.btnOff, step === 'sex' && !sex && s.btnOff]}
+            style={[s.btn, step === 'name' && name.trim().length < 2 && s.btnOff, step === 'sex' && !sex && s.btnOff, step === 'body' && (!height || !weight) && s.btnOff]}
             onPress={handleNext} activeOpacity={0.8}
           >
             <Text style={s.btnText}>{step === 'theme' ? 'Get Started' : 'Continue'}</Text>
@@ -271,4 +321,11 @@ const makeStyles = (c: ColorPalette) => StyleSheet.create({
   themeLabel: { fontSize: 16, fontWeight: '700' },
   themeCheck: { position: 'absolute', top: 10, right: 10, width: 24, height: 24, borderRadius: 12, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center' },
   themeCheckText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  // Body step
+  bodyRow: { flexDirection: 'row', gap: 16, marginBottom: 28 },
+  bodyCol: { flex: 1 },
+  bodyLabel: { fontSize: 12, fontWeight: '700', color: c.textTertiary, letterSpacing: 0.8, marginBottom: 10 },
+  bodyInputWrap: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1.5, borderBottomColor: c.border, paddingBottom: 4 },
+  bodyInput: { flex: 1, fontSize: 28, fontWeight: '700', color: c.text, paddingVertical: 8 },
+  bodyUnit: { fontSize: 16, fontWeight: '600', color: c.textTertiary, marginLeft: 6 },
 });

@@ -47,6 +47,8 @@ export interface UserProfile {
   name: string;
   dob: string;
   sex: string;
+  height?: number;  // cm
+  weight?: number;  // kg
 }
 
 export async function saveProfile(profile: UserProfile): Promise<void> {
